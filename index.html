@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aeroguard Oracle — Live Operations</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@300;400;500&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root {
+  --bg0:#0d0e10;--bg1:#131417;--bg2:#191b1f;--bg3:#1f2228;--bg4:#272a31;
+  --bdim:rgba(255,255,255,0.05);--bmid:rgba(255,255,255,0.09);--bhi:rgba(255,255,255,0.15);
+  --t1:#eceef2;--t2:#8c919d;--t3:#4e5260;--t4:#2e3038;
+  --danger:#d45f5f;--ddim:rgba(212,95,95,0.13);--db:rgba(212,95,95,0.28);
+  --warn:#c2834a;--wdim:rgba(194,131,74,0.13);
+  --safe:#4d9e6a;--sdim:rgba(77,158,106,0.13);
+  --oracle:#6a9fb8;--odim:rgba(106,159,184,0.15);--ob:rgba(106,159,184,0.3);
+  --fd:'Barlow Condensed',sans-serif;--fm:'IBM Plex Mono',monospace;--fb:'Barlow',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg0);color:var(--t1);font-family:var(--fb);}
+
+/* HEADER */
+.hdr{position:fixed;top:0;left:0;right:0;height:50px;background:rgba(13,14,16,0.97);border-bottom:1px solid var(--bmid);backdrop-filter:blur(14px);display:flex;align-items:center;justify-content:space-between;padding:0 18px;z-index:1000;}
+.hdr-l{display:flex;align-items:center;gap:14px;}
+.wordmark{font-family:var(--fd);font-size:18px;font-weight:700;letter-spacing:4px;text-transform:uppercase;color:var(--t1);}
+.wordmark span{font-weight:300;color:var(--t2);}
+.vr{width:1px;height:22px;background:var(--bmid);}
+.orc-tag{display:flex;align-items:center;gap:7px;font-family:var(--fm);font-size:10px;letter-spacing:2px;color:var(--oracle);text-transform:uppercase;}
+.orc-ring{width:13px;height:13px;border:1.5px solid var(--oracle);border-radius:50%;display:flex;align-items:center;justify-content:center;}
+.orc-ring::after{content:'';width:4px;height:4px;border-radius:50%;background:var(--oracle);}
+.hdr-c{position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:22px;}
+.hs{display:flex;flex-direction:column;align-items:center;}
+.hs-v{font-family:var(--fm);font-size:16px;font-weight:500;line-height:1;}
+.hs-v.d{color:var(--danger);}
+.hs-v.w{color:var(--warn);}
+.hs-v.s{color:var(--safe);}
+.hs-l{font-family:var(--fm);font-size:8px;letter-spacing:1.5px;color:var(--t3);margin-top:2px;text-transform:uppercase;}
+.hdivider{width:1px;height:28px;background:var(--bdim);}
+.hdr-r{display:flex;align-items:center;gap:12px;}
+.sys-badge{display:flex;align-items:center;gap:6px;font-family:var(--fm);font-size:10px;color:var(--safe);background:var(--sdim);border:1px solid rgba(77,158,106,0.22);padding:4px 10px;letter-spacing:1.5px;}
+.pulse{width:5px;height:5px;border-radius:50%;background:var(--safe);animation:blink 1.8s ease-in-out infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+.clock{font-family:var(--fm);font-size:12px;color:var(--t2);text-align:right;line-height:1.4;}
+.clock-d{font-size:9px;color:var(--t3);}
+
+/* MAP */
+#map{position:fixed;top:50px;left:0;right:0;bottom:0;z-index:1;}
+
+/* RADAR CANVAS OVERLAY */
+#radarCanvas{position:fixed;top:50px;left:0;right:0;bottom:0;z-index:2;pointer-events:none;}
+
+/* FLOATING PANELS */
+.fpanel{position:fixed;z-index:500;background:rgba(13,14,16,0.93);border:1px solid var(--bmid);backdrop-filter:blur(18px);}
+.lp{top:66px;left:14px;width:310px;bottom:14px;display:flex;flex-direction:column;}
+.tab-bar{display:flex;border-bottom:1px solid var(--bmid);background:var(--bg1);flex-shrink:0;}
+.tab-btn{flex:1;padding:9px 4px;font-family:var(--fd);font-size:10px;letter-spacing:1.5px;font-weight:600;text-transform:uppercase;color:var(--t3);background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all 0.15s;}
+.tab-btn:hover{color:var(--t2);}
+.tab-btn.active{color:var(--t1);border-bottom-color:var(--oracle);}
+.tab-body{flex:1;overflow-y:auto;padding:8px;}
+.tab-pane{display:none;}
+.tab-pane.active{display:block;}
+::-webkit-scrollbar{width:3px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:2px;}
+
+/* Threat cards */
+.t-card{background:var(--bg2);border:1px solid var(--bdim);padding:10px 12px;margin-bottom:6px;cursor:pointer;position:relative;overflow:hidden;transition:border-color 0.2s,background 0.2s;}
+.t-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;}
+.t-card.high::before{background:var(--danger);}
+.t-card.med::before{background:var(--warn);}
+.t-card.low::before{background:var(--safe);}
+.t-card:hover{border-color:var(--bhi);background:var(--bg3);}
+.t-card.sel{border-color:var(--oracle);background:var(--odim);}
+.tc-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+.tc-id{font-family:var(--fd);font-size:14px;font-weight:700;letter-spacing:1px;}
+.tc-id.high{color:var(--danger);}
+.tc-id.med{color:var(--warn);}
+.tc-id.low{color:var(--safe);}
+.tc-badge{font-family:var(--fm);font-size:8px;letter-spacing:1px;padding:2px 7px;border:1px solid;text-transform:uppercase;}
+.tc-badge.high{color:var(--danger);border-color:var(--db);background:var(--ddim);}
+.tc-badge.med{color:var(--warn);border-color:rgba(194,131,74,0.28);background:var(--wdim);}
+.tc-badge.low{color:var(--safe);border-color:rgba(77,158,106,0.28);background:var(--sdim);}
+.tc-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 8px;}
+.tc-row{display:flex;flex-direction:column;}
+.tc-lbl{font-family:var(--fm);font-size:8px;letter-spacing:0.5px;color:var(--t3);text-transform:uppercase;}
+.tc-val{font-family:var(--fm);font-size:10px;color:var(--t2);}
+.tc-val.dist{color:var(--oracle);font-weight:500;}
+.tc-val.hot{color:var(--warn);}
+
+/* Oracle cards */
+.o-card{background:var(--bg2);border:1px solid var(--bdim);padding:10px 12px;margin-bottom:6px;position:relative;overflow:hidden;}
+.o-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--oracle);}
+.o-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+.o-name{font-family:var(--fd);font-size:14px;font-weight:700;letter-spacing:1px;color:var(--oracle);}
+.o-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 8px;}
+.o-row{display:flex;flex-direction:column;}
+.o-lbl{font-family:var(--fm);font-size:8px;color:var(--t3);text-transform:uppercase;letter-spacing:0.5px;}
+.o-val{font-family:var(--fm);font-size:10px;color:var(--t2);}
+.o-val.live{color:var(--safe);}
+.sig-bars{display:flex;align-items:flex-end;gap:2px;height:18px;margin-top:4px;}
+.sig-bar{width:5px;border-radius:1px 1px 0 0;background:var(--bg4);}
+.sig-bar.on-s{background:var(--safe);}
+.sig-bar.on-w{background:var(--warn);}
+
+/* Log */
+.log-line{font-family:var(--fm);font-size:9px;line-height:1.9;display:flex;gap:8px;border-bottom:1px solid var(--bdim);padding:2px 0;}
+.log-t{color:var(--t3);flex-shrink:0;width:58px;}
+.log-msg{color:var(--t2);}
+.log-msg.alert{color:var(--danger);}
+.log-msg.warn{color:var(--warn);}
+.log-msg.ok{color:var(--safe);}
+
+/* RF */
+.rf-section-title{font-family:var(--fm);font-size:9px;letter-spacing:1.5px;color:var(--t3);text-transform:uppercase;margin:10px 0 6px;}
+.rf-band{margin-bottom:10px;}
+.rf-band-label{display:flex;justify-content:space-between;font-family:var(--fm);font-size:9px;color:var(--t2);margin-bottom:4px;}
+.rf-bars{display:flex;align-items:flex-end;gap:1px;height:44px;}
+.rf-bar{flex:1;min-height:3px;border-radius:1px 1px 0 0;transition:height 0.18s ease;}
+
+/* Detail card */
+.detail-card{bottom:14px;right:14px;width:260px;display:none;}
+.detail-card.show{display:block;}
+.dc-hdr{padding:10px 14px;border-bottom:1px solid var(--bmid);display:flex;justify-content:space-between;align-items:center;}
+.dc-title{font-family:var(--fd);font-size:14px;font-weight:700;letter-spacing:1.5px;color:var(--t1);}
+.dc-close{background:none;border:none;color:var(--t3);cursor:pointer;font-size:16px;line-height:1;padding:0 2px;}
+.dc-close:hover{color:var(--t1);}
+.dc-body{padding:12px 14px;}
+.dc-field{margin-bottom:8px;}
+.dc-lbl{font-family:var(--fm);font-size:8px;letter-spacing:1.5px;color:var(--t3);text-transform:uppercase;margin-bottom:2px;}
+.dc-val{font-family:var(--fm);font-size:11px;color:var(--t1);}
+.dc-dist-row{display:flex;flex-direction:column;background:var(--bg3);padding:5px 8px;border:1px solid var(--bdim);margin-bottom:4px;}
+.dc-dist-top{display:flex;justify-content:space-between;}
+.dc-dist-name{font-family:var(--fm);font-size:9px;color:var(--oracle);}
+.dc-dist-km{font-family:var(--fm);font-size:10px;font-weight:500;}
+.dc-bar-wrap{width:100%;height:2px;background:var(--bg4);margin-top:4px;}
+.dc-bar-fill{height:100%;transition:width 0.5s ease;}
+
+/* Scale */
+.scale-badge{bottom:14px;left:50%;transform:translateX(-50%);padding:6px 14px;font-family:var(--fm);font-size:9px;letter-spacing:1.5px;color:var(--t2);background:rgba(13,14,16,0.85);border:1px solid var(--bmid);white-space:nowrap;}
+
+/* Leaflet overrides */
+.leaflet-control-zoom{display:none;}
+.leaflet-control-attribution{display:none;}
+.leaflet-popup-content-wrapper{background:rgba(13,14,16,0.95);border:1px solid var(--bmid);border-radius:0;color:var(--t1);font-family:'IBM Plex Mono',monospace;font-size:10px;backdrop-filter:blur(12px);box-shadow:0 4px 24px rgba(0,0,0,0.6);}
+.leaflet-popup-tip{background:rgba(13,14,16,0.95);}
+.leaflet-popup-content{margin:10px 14px;line-height:1.7;}
+@keyframes droneRing{0%{transform:scale(0.6);opacity:0.8}100%{transform:scale(2.5);opacity:0}}
+.drone-pulse{animation:droneRing 2s ease-out infinite;}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="hdr">
+  <div class="hdr-l">
+    <div class="wordmark">AERO<span>GUARD</span></div>
+    <div class="vr"></div>
+    <div class="orc-tag"><div class="orc-ring"></div>Oracle Detection Network</div>
+  </div>
+  <div class="hdr-c">
+    <div class="hs"><div class="hs-v d" id="hActiveThreats">3</div><div class="hs-l">Active Threats</div></div>
+    <div class="hdivider"></div>
+    <div class="hs"><div class="hs-v w" id="hDetections">17</div><div class="hs-l">Detections Today</div></div>
+    <div class="hdivider"></div>
+    <div class="hs"><div class="hs-v" id="hUnits">3</div><div class="hs-l">Oracle Units</div></div>
+    <div class="hdivider"></div>
+    <div class="hs"><div class="hs-v s">15 km</div><div class="hs-l">Detection Range</div></div>
+  </div>
+  <div class="hdr-r">
+    <div class="sys-badge"><div class="pulse"></div>ALL SYSTEMS NOMINAL</div>
+    <div class="clock"><div id="clk">--:--:-- UTC</div><div class="clock-d" id="clkd">---</div></div>
+  </div>
+</header>
+
+<!-- MAP -->
+<div id="map"></div>
+
+<!-- RADAR CANVAS -->
+<canvas id="radarCanvas"></canvas>
+
+<!-- LEFT PANEL -->
+<div class="fpanel lp">
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('threats',this)">Threats</button>
+    <button class="tab-btn" onclick="switchTab('oracle',this)">Oracle Units</button>
+    <button class="tab-btn" onclick="switchTab('rf',this)">RF Spectrum</button>
+    <button class="tab-btn" onclick="switchTab('log',this)">Log</button>
+  </div>
+  <div class="tab-body">
+    <div class="tab-pane active" id="tab-threats"><div id="threatCards"></div></div>
+    <div class="tab-pane" id="tab-oracle"><div id="oracleCards"></div></div>
+    <div class="tab-pane" id="tab-rf">
+      <div class="rf-section-title">Live RF Activity</div>
+      <div class="rf-band"><div class="rf-band-label"><span>433 MHz</span><span id="rf433">—</span></div><div class="rf-bars" id="rfBars433"></div></div>
+      <div class="rf-band"><div class="rf-band-label"><span>868 MHz</span><span id="rf868">—</span></div><div class="rf-bars" id="rfBars868"></div></div>
+      <div class="rf-band"><div class="rf-band-label"><span>915 MHz</span><span id="rf915">—</span></div><div class="rf-bars" id="rfBars915"></div></div>
+      <div class="rf-band"><div class="rf-band-label" style="color:var(--warn)"><span>2.4 GHz ⚠ ACTIVE</span><span id="rf24">—</span></div><div class="rf-bars" id="rfBars24"></div></div>
+      <div class="rf-band"><div class="rf-band-label"><span>5.8 GHz</span><span id="rf58">—</span></div><div class="rf-bars" id="rfBars58"></div></div>
+    </div>
+    <div class="tab-pane" id="tab-log"><div id="logLines"></div></div>
+  </div>
+</div>
+
+<!-- DETAIL CARD -->
+<div class="fpanel detail-card" id="detailCard">
+  <div class="dc-hdr">
+    <div class="dc-title" id="dcTitle">—</div>
+    <button class="dc-close" onclick="closeDetail()">✕</button>
+  </div>
+  <div class="dc-body">
+    <div class="dc-field"><div class="dc-lbl">Protocol</div><div class="dc-val" id="dcProto">—</div></div>
+    <div class="dc-field"><div class="dc-lbl">Frequency</div><div class="dc-val" id="dcFreq">—</div></div>
+    <div class="dc-field"><div class="dc-lbl">Signal Strength</div><div class="dc-val" id="dcSig">—</div></div>
+    <div class="dc-field"><div class="dc-lbl">Distance to Oracle Units</div><div id="dcDists"></div></div>
+  </div>
+</div>
+
+<!-- SCALE -->
+<div class="fpanel scale-badge">ORACLE DETECTION RADIUS: 15 km &nbsp;|&nbsp; SITE: BUDAPEST, HUNGARY &nbsp;|&nbsp; <span id="zoomLvl">ZOOM 11</span></div>
+
+<script>
+// ══════════════════════════════════════════════
+// DATA — BUDAPEST
+// ══════════════════════════════════════════════
+
+// Center: Budapest city center (Parliament)
+const CENTER = [47.5050, 19.0530];
+
+// Oracle units in TRIANGLE formation — spaced ~8-9km apart so 15km ranges
+// heavily overlap and together blanket Budapest city center.
+// Each side of the triangle ≈ 8.5km, well within mutual 15km coverage.
+// Top (north) — ORACLE-1: Óbuda / north Buda
+// Bottom-left (SW) — ORACLE-2: Kelenföld / south Buda  
+// Bottom-right (SE) — ORACLE-3: Ferencváros / south Pest
+const oracleUnits = [
+  { id:'ORACLE-1', lat:47.5480, lng:19.0330, status:'NOMINAL',  freq:'2.4GHz / 5.8GHz', uptime:'14d 6h', range:15, detections:12 },
+  { id:'ORACLE-2', lat:47.4720, lng:18.9980, status:'NOMINAL',  freq:'433MHz / 915MHz',  uptime:'14d 6h', range:15, detections:4  },
+  { id:'ORACLE-3', lat:47.4700, lng:19.0980, status:'DEGRADED', freq:'868MHz / 2.4GHz',  uptime:'2d 3h',  range:12, detections:1  },
+];
+
+const threats = [
+  { id:'UAS-009', lat:47.5200, lng:19.0650, level:'high', proto:'DJI OcuSync 3', freq:'2.4 GHz', sig:'-48 dBm', bearing:'042°', model:'DJI Matrice 300', status:'TRACKING' },
+  { id:'UAS-007', lat:47.4900, lng:19.0150, level:'med',  proto:'Custom RF',     freq:'915 MHz', sig:'-63 dBm', bearing:'218°', model:'Unknown',         status:'TRACKING' },
+  { id:'UAS-012', lat:47.5050, lng:19.0900, level:'low',  proto:'Parrot CTRL',   freq:'433 MHz', sig:'-72 dBm', bearing:'305°', model:'Parrot Anafi',    status:'MONITOR'  },
+];
+
+function haversine(lat1,lng1,lat2,lng2){
+  const R=6371,dLat=(lat2-lat1)*Math.PI/180,dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+// ══════════════════════════════════════════════
+// MAP
+// ══════════════════════════════════════════════
+const map = L.map('map',{center:CENTER,zoom:11,zoomControl:false,attributionControl:false});
+
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19}).addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png',{maxZoom:19,opacity:0.55}).addTo(map);
+
+map.on('zoomend',()=>{document.getElementById('zoomLvl').textContent='ZOOM '+map.getZoom();});
+
+// ══════════════════════════════════════════════
+// RADAR CANVAS — sweep animation over map
+// ══════════════════════════════════════════════
+const rc = document.getElementById('radarCanvas');
+const rctx = rc.getContext('2d');
+let sweepAngle = 0;
+let radarVisible = true;
+
+function resizeCanvas(){
+  rc.width = window.innerWidth;
+  rc.height = window.innerHeight - 50;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// Convert lat/lng to canvas pixel
+function latlngToCanvas(lat, lng){
+  const pt = map.latLngToContainerPoint(L.latLng(lat, lng));
+  return { x: pt.x, y: pt.y };
+}
+
+// Oracle triangle centroid
+function triangleCentroid(){
+  const lat = (oracleUnits[0].lat + oracleUnits[1].lat + oracleUnits[2].lat) / 3;
+  const lng = (oracleUnits[0].lng + oracleUnits[1].lng + oracleUnits[2].lng) / 3;
+  return latlngToCanvas(lat, lng);
+}
+
+// Compute radius of circumscribed circle of triangle in pixels (avg dist from centroid to vertex)
+function triangleRadius(){
+  const cLat = (oracleUnits[0].lat + oracleUnits[1].lat + oracleUnits[2].lat) / 3;
+  const cLng = (oracleUnits[0].lng + oracleUnits[1].lng + oracleUnits[2].lng) / 3;
+  const c = latlngToCanvas(cLat, cLng);
+  let total = 0;
+  oracleUnits.forEach(u => {
+    const p = latlngToCanvas(u.lat, u.lng);
+    total += Math.sqrt((p.x-c.x)**2 + (p.y-c.y)**2);
+  });
+  return total / 3 * 1.1; // slightly larger than avg
+}
+
+function drawRadar(){
+  if(!radarVisible){ rctx.clearRect(0,0,rc.width,rc.height); return; }
+
+  rctx.clearRect(0,0,rc.width,rc.height);
+
+  const c = triangleCentroid();
+  const R = triangleRadius();
+
+  // ── Protected zone fill ──
+  const verts = oracleUnits.map(u => latlngToCanvas(u.lat, u.lng));
+  rctx.save();
+  rctx.beginPath();
+  rctx.moveTo(verts[0].x, verts[0].y);
+  rctx.lineTo(verts[1].x, verts[1].y);
+  rctx.lineTo(verts[2].x, verts[2].y);
+  rctx.closePath();
+  rctx.fillStyle = 'rgba(106,159,184,0.10)';
+  rctx.fill();
+  rctx.strokeStyle = 'rgba(106,159,184,0.60)';
+  rctx.lineWidth = 2;
+  rctx.setLineDash([6, 8]);
+  rctx.stroke();
+  rctx.setLineDash([]);
+  rctx.restore();
+
+  // ── Concentric radar rings ──
+  const kmPerPx = haversine(
+    oracleUnits[0].lat, oracleUnits[0].lng,
+    oracleUnits[1].lat, oracleUnits[1].lng
+  ) / Math.sqrt(
+    (latlngToCanvas(oracleUnits[0].lat,oracleUnits[0].lng).x - latlngToCanvas(oracleUnits[1].lat,oracleUnits[1].lng).x)**2 +
+    (latlngToCanvas(oracleUnits[0].lat,oracleUnits[0].lng).y - latlngToCanvas(oracleUnits[1].lat,oracleUnits[1].lng).y)**2
+  );
+
+  for(let i=1;i<=4;i++){
+    const r = R * i / 4;
+    rctx.save();
+    rctx.beginPath();
+    rctx.arc(c.x, c.y, r, 0, Math.PI*2);
+    rctx.strokeStyle = `rgba(106,159,184,${0.18 + i*0.08})`;
+    rctx.lineWidth = 1;
+    rctx.setLineDash([4,6]);
+    rctx.stroke();
+    rctx.setLineDash([]);
+    rctx.restore();
+
+    const ringKm = (r * kmPerPx).toFixed(0);
+    rctx.save();
+    rctx.font = "bold 9px 'IBM Plex Mono'";
+    rctx.fillStyle = 'rgba(160,210,240,0.80)';
+    rctx.fillText(ringKm+' km', c.x+r+4, c.y-4);
+    rctx.restore();
+  }
+
+  // ── Cross hairs ──
+  rctx.save();
+  rctx.strokeStyle = 'rgba(106,159,184,0.22)';
+  rctx.lineWidth = 1;
+  rctx.setLineDash([2,8]);
+  rctx.beginPath(); rctx.moveTo(c.x-R, c.y); rctx.lineTo(c.x+R, c.y); rctx.stroke();
+  rctx.beginPath(); rctx.moveTo(c.x, c.y-R); rctx.lineTo(c.x, c.y+R); rctx.stroke();
+  rctx.setLineDash([]);
+  rctx.restore();
+
+  // ── Sweep trail ──
+  rctx.save();
+  rctx.translate(c.x, c.y);
+  const trailWidth = 1.2;
+  const steps = 20;
+  for(let s=0;s<steps;s++){
+    const a0 = sweepAngle - trailWidth + (trailWidth/steps)*s;
+    const a1 = sweepAngle - trailWidth + (trailWidth/steps)*(s+1);
+    rctx.beginPath();
+    rctx.moveTo(0,0);
+    rctx.arc(0,0,R,a0,a1);
+    rctx.closePath();
+    rctx.fillStyle = `rgba(106,159,184,${(s/steps)*0.45})`;
+    rctx.fill();
+  }
+
+  // Sweep line with glow
+  rctx.beginPath();
+  rctx.moveTo(0,0);
+  rctx.lineTo(Math.cos(sweepAngle)*R, Math.sin(sweepAngle)*R);
+  rctx.strokeStyle = 'rgba(180,225,255,0.95)';
+  rctx.lineWidth = 2.5;
+  rctx.shadowColor = 'rgba(106,159,184,1)';
+  rctx.shadowBlur = 12;
+  rctx.stroke();
+  rctx.shadowBlur = 0;
+  rctx.restore();
+
+  // ── Drone blips ──
+  threats.forEach(t => {
+    const dp = latlngToCanvas(t.lat, t.lng);
+    const col = t.level==='high'?'#d45f5f':t.level==='med'?'#c2834a':'#4d9e6a';
+    const pulse = (Math.sin(Date.now()/500)+1)/2;
+    rctx.save();
+    rctx.beginPath();
+    rctx.arc(dp.x, dp.y, 10 + pulse*7, 0, Math.PI*2);
+    rctx.strokeStyle = col;
+    rctx.lineWidth = 1.5;
+    rctx.globalAlpha = 0.4 + pulse*0.3;
+    rctx.stroke();
+    rctx.globalAlpha = 1;
+    rctx.beginPath();
+    rctx.arc(dp.x, dp.y, 5, 0, Math.PI*2);
+    rctx.fillStyle = col;
+    rctx.shadowColor = col;
+    rctx.shadowBlur = 12;
+    rctx.fill();
+    rctx.shadowBlur = 0;
+    rctx.restore();
+  });
+
+  // ── Center marker ──
+  rctx.save();
+  rctx.beginPath();
+  rctx.arc(c.x, c.y, 5, 0, Math.PI*2);
+  rctx.fillStyle = 'rgba(160,210,240,0.95)';
+  rctx.shadowColor = 'rgba(106,159,184,0.9)';
+  rctx.shadowBlur = 12;
+  rctx.fill();
+  rctx.shadowBlur = 0;
+  rctx.restore();
+
+  sweepAngle += 0.012;
+  if(sweepAngle > Math.PI*2) sweepAngle -= Math.PI*2;
+}
+
+// Update radar on map move/zoom too
+map.on('move', drawRadar);
+map.on('zoom', drawRadar);
+
+function radarLoop(){
+  drawRadar();
+  requestAnimationFrame(radarLoop);
+}
+radarLoop();
+
+// ══════════════════════════════════════════════
+// ORACLE MARKERS & RANGE CIRCLES
+// ══════════════════════════════════════════════
+oracleUnits.forEach(u => {
+  // Range circle
+  L.circle([u.lat, u.lng],{
+    radius: u.range*1000,
+    color:'#6a9fb8', fillColor:'#6a9fb8',
+    fillOpacity:0.03, weight:1, dashArray:'4 8', opacity:0.3
+  }).addTo(map);
+
+  const col = u.status==='NOMINAL'?'#4d9e6a':'#c2834a';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">
+    <circle cx="17" cy="17" r="15" fill="rgba(13,14,16,0.88)" stroke="${col}" stroke-width="1.5"/>
+    <circle cx="17" cy="17" r="9" fill="none" stroke="${col}" stroke-width="1" opacity="0.45"/>
+    <circle cx="17" cy="17" r="3" fill="${col}"/>
+    <line x1="17" y1="2" x2="17" y2="8" stroke="${col}" stroke-width="1.5"/>
+    <line x1="17" y1="26" x2="17" y2="32" stroke="${col}" stroke-width="1.5"/>
+    <line x1="2" y1="17" x2="8" y2="17" stroke="${col}" stroke-width="1.5"/>
+    <line x1="26" y1="17" x2="32" y2="17" stroke="${col}" stroke-width="1.5"/>
+  </svg>`;
+
+  const icon = L.divIcon({html:svg,className:'',iconSize:[34,34],iconAnchor:[17,17]});
+  L.marker([u.lat,u.lng],{icon}).addTo(map)
+   .bindTooltip(`<b style="color:#6a9fb8;letter-spacing:1px">${u.id}</b><br>${u.status} · ${u.range}km range`,{direction:'top'});
+
+  // Label
+  const lbl = L.divIcon({
+    html:`<div style="font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:1.5px;color:${col};background:rgba(13,14,16,0.82);padding:2px 6px;border:1px solid ${col}44;white-space:nowrap;margin-top:20px">${u.id}</div>`,
+    className:'',iconAnchor:[0,0]
+  });
+  L.marker([u.lat,u.lng],{icon:lbl,interactive:false}).addTo(map);
+});
+
+// ══════════════════════════════════════════════
+// DRONE MARKERS + DISTANCE LINES
+// ══════════════════════════════════════════════
+threats.forEach(t => {
+  const c = t.level==='high'?'#d45f5f':t.level==='med'?'#c2834a':'#4d9e6a';
+
+  const svg = `<div style="position:relative;width:40px;height:40px">
+    <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40" style="position:absolute;top:0;left:0">
+      <circle cx="20" cy="20" r="17" fill="none" stroke="${c}" stroke-width="1" opacity="0.3" class="drone-pulse"/>
+    </svg>
+    <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40" style="position:absolute;top:0;left:0">
+      <circle cx="20" cy="20" r="8" fill="rgba(13,14,16,0.9)" stroke="${c}" stroke-width="2"/>
+      <circle cx="20" cy="20" r="3" fill="${c}"/>
+      <line x1="5" y1="5" x2="12" y2="12" stroke="${c}" stroke-width="1.5" opacity="0.7"/>
+      <line x1="35" y1="5" x2="28" y2="12" stroke="${c}" stroke-width="1.5" opacity="0.7"/>
+      <line x1="5" y1="35" x2="12" y2="28" stroke="${c}" stroke-width="1.5" opacity="0.7"/>
+      <line x1="35" y1="35" x2="28" y2="28" stroke="${c}" stroke-width="1.5" opacity="0.7"/>
+      <circle cx="5" cy="5" r="3" fill="${c}" opacity="0.8"/>
+      <circle cx="35" cy="5" r="3" fill="${c}" opacity="0.8"/>
+      <circle cx="5" cy="35" r="3" fill="${c}" opacity="0.8"/>
+      <circle cx="35" cy="35" r="3" fill="${c}" opacity="0.8"/>
+    </svg>
+  </div>`;
+
+  const icon = L.divIcon({html:svg,className:'',iconSize:[40,40],iconAnchor:[20,20]});
+  const m = L.marker([t.lat,t.lng],{icon}).addTo(map);
+  m.on('click',()=>openDetail(t.id));
+
+  // Distance lines
+  oracleUnits.forEach(u => {
+    const dist = haversine(t.lat,t.lng,u.lat,u.lng);
+    const inRange = dist <= u.range;
+    L.polyline([[t.lat,t.lng],[u.lat,u.lng]],{
+      color: inRange ? c : '#3a3e47',
+      weight: inRange ? 1.5 : 0.8,
+      opacity: inRange ? 0.45 : 0.18,
+      dashArray:'5 8'
+    }).addTo(map);
+
+    // Midpoint distance label
+    const ml = L.divIcon({
+      html:`<div style="font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:1px;color:${inRange?'#6a9fb8':'#3a3e47'};background:rgba(13,14,16,0.85);padding:1px 5px;border:1px solid ${inRange?'#6a9fb833':'#2a2d3433'};white-space:nowrap">${dist.toFixed(1)} km</div>`,
+      className:'',iconAnchor:[20,8]
+    });
+    L.marker([(t.lat+u.lat)/2,(t.lng+u.lng)/2],{icon:ml,interactive:false}).addTo(map);
+  });
+
+  // Drone label
+  const dl = L.divIcon({
+    html:`<div style="font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:1px;color:${c};background:rgba(13,14,16,0.85);padding:2px 6px;border:1px solid ${c}44;white-space:nowrap;margin-top:22px">${t.id} · ${t.level.toUpperCase()}</div>`,
+    className:'',iconAnchor:[0,0]
+  });
+  L.marker([t.lat,t.lng],{icon:dl,interactive:false}).addTo(map);
+});
+
+// ══════════════════════════════════════════════
+// THREAT CARDS
+// ══════════════════════════════════════════════
+function buildThreatCards(){
+  const el = document.getElementById('threatCards');
+  el.innerHTML='';
+  threats.forEach(t=>{
+    const dists = oracleUnits.map(u=>({id:u.id,dist:haversine(t.lat,t.lng,u.lat,u.lng)})).sort((a,b)=>a.dist-b.dist);
+    const card = document.createElement('div');
+    card.className=`t-card ${t.level}`;
+    card.id=`tcard-${t.id}`;
+    card.onclick=()=>openDetail(t.id);
+    card.innerHTML=`
+      <div class="tc-top">
+        <div class="tc-id ${t.level}">${t.id}</div>
+        <div class="tc-badge ${t.level}">${t.level==='high'?'HIGH':t.level==='med'?'MEDIUM':'LOW'}</div>
+      </div>
+      <div class="tc-grid">
+        <div class="tc-row"><div class="tc-lbl">Model</div><div class="tc-val">${t.model}</div></div>
+        <div class="tc-row"><div class="tc-lbl">Frequency</div><div class="tc-val">${t.freq}</div></div>
+        <div class="tc-row"><div class="tc-lbl">Signal</div><div class="tc-val hot">${t.sig}</div></div>
+        <div class="tc-row"><div class="tc-lbl">Status</div><div class="tc-val">${t.status}</div></div>
+        <div class="tc-row"><div class="tc-lbl">Nearest Oracle</div><div class="tc-val dist">${dists[0].id.replace('ORACLE-','ORC-')} · ${dists[0].dist.toFixed(1)} km</div></div>
+        <div class="tc-row"><div class="tc-lbl">Bearing</div><div class="tc-val">${t.bearing}</div></div>
+      </div>`;
+    el.appendChild(card);
+  });
+}
+buildThreatCards();
+
+// ══════════════════════════════════════════════
+// ORACLE CARDS
+// ══════════════════════════════════════════════
+function buildOracleCards(){
+  const el = document.getElementById('oracleCards');
+  el.innerHTML='';
+  oracleUnits.forEach(u=>{
+    const inRange = threats.filter(t=>haversine(t.lat,t.lng,u.lat,u.lng)<=u.range);
+    const sigLvl = u.status==='NOMINAL'?5:3;
+    let bars='';
+    for(let i=0;i<7;i++){
+      const h=25+i*10;
+      bars+=`<div class="sig-bar ${i<sigLvl?(u.status==='NOMINAL'?'on-s':'on-w'):''}" style="height:${h}%"></div>`;
+    }
+    const col = u.status==='NOMINAL'?'var(--safe)':'var(--warn)';
+    const borcol = u.status==='NOMINAL'?'rgba(77,158,106,0.3)':'rgba(194,131,74,0.3)';
+    const bgcol = u.status==='NOMINAL'?'var(--sdim)':'var(--wdim)';
+    const card = document.createElement('div');
+    card.className='o-card';
+    card.innerHTML=`
+      <div class="o-top">
+        <div class="o-name">${u.id}</div>
+        <div style="font-family:var(--fm);font-size:8px;letter-spacing:1px;padding:2px 7px;border:1px solid ${borcol};background:${bgcol};color:${col};text-transform:uppercase">${u.status}</div>
+      </div>
+      <div class="o-grid">
+        <div class="o-row"><div class="o-lbl">Detection Range</div><div class="o-val live">${u.range} km</div></div>
+        <div class="o-row"><div class="o-lbl">Freq Bands</div><div class="o-val">${u.freq}</div></div>
+        <div class="o-row"><div class="o-lbl">Uptime</div><div class="o-val">${u.uptime}</div></div>
+        <div class="o-row"><div class="o-lbl">Detections Today</div><div class="o-val">${u.detections}</div></div>
+        <div class="o-row"><div class="o-lbl">Threats In Range</div><div class="o-val" style="color:${inRange.length>0?'var(--danger)':'var(--safe)'}">${inRange.length} active</div></div>
+        <div class="o-row"><div class="o-lbl">Signal Quality</div><div class="sig-bars">${bars}</div></div>
+      </div>`;
+    el.appendChild(card);
+  });
+}
+buildOracleCards();
+
+// ══════════════════════════════════════════════
+// DETAIL CARD
+// ══════════════════════════════════════════════
+function openDetail(id){
+  const t = threats.find(x=>x.id===id);
+  if(!t) return;
+  document.getElementById('dcTitle').textContent = t.id+' — '+t.model;
+  document.getElementById('dcProto').textContent = t.proto;
+  document.getElementById('dcFreq').textContent = t.freq;
+  document.getElementById('dcSig').textContent = t.sig;
+  const dists = oracleUnits.map(u=>({id:u.id,dist:haversine(t.lat,t.lng,u.lat,u.lng),range:u.range})).sort((a,b)=>a.dist-b.dist);
+  const dl = document.getElementById('dcDists');
+  dl.innerHTML='';
+  dists.forEach(d=>{
+    const pct = Math.min(100,(d.dist/15)*100);
+    const inR = d.dist<=d.range;
+    const row = document.createElement('div');
+    row.className='dc-dist-row';
+    row.innerHTML=`
+      <div class="dc-dist-top">
+        <span class="dc-dist-name">${d.id}</span>
+        <span class="dc-dist-km" style="color:${inR?'var(--oracle)':'var(--t3)'}">${d.dist.toFixed(2)} km${inR?' ✓':''}</span>
+      </div>
+      <div class="dc-bar-wrap"><div class="dc-bar-fill" style="width:${pct}%;background:${inR?'var(--oracle)':'var(--t4)'}"></div></div>`;
+    dl.appendChild(row);
+  });
+  document.getElementById('detailCard').classList.add('show');
+  document.querySelectorAll('.t-card').forEach(c=>c.classList.remove('sel'));
+  const tc=document.getElementById('tcard-'+id);
+  if(tc) tc.classList.add('sel');
+  map.panTo([t.lat,t.lng],{animate:true,duration:0.6});
+}
+
+function closeDetail(){
+  document.getElementById('detailCard').classList.remove('show');
+  document.querySelectorAll('.t-card').forEach(c=>c.classList.remove('sel'));
+}
+
+// ══════════════════════════════════════════════
+// RF SPECTRUM
+// ══════════════════════════════════════════════
+const rfBands=[
+  {id:'rfBars433',lbl:'rf433',count:12,base:12,hot:false},
+  {id:'rfBars868',lbl:'rf868',count:12,base:10,hot:false},
+  {id:'rfBars915',lbl:'rf915',count:12,base:14,hot:false},
+  {id:'rfBars24', lbl:'rf24', count:16,base:45,hot:true},
+  {id:'rfBars58', lbl:'rf58', count:12,base:8, hot:false},
+];
+rfBands.forEach(b=>{
+  const w=document.getElementById(b.id);
+  for(let i=0;i<b.count;i++){
+    const bar=document.createElement('div');
+    bar.className='rf-bar';
+    bar.style.background=b.hot?'var(--warn)':'var(--oracle)';
+    bar.style.opacity=b.hot?'0.7':'0.5';
+    w.appendChild(bar);
+  }
+});
+function animateRF(){
+  rfBands.forEach(b=>{
+    const bars=document.getElementById(b.id).children;
+    let total=0;
+    for(let bar of bars){const h=b.base+Math.random()*(b.hot?45:20);bar.style.height=h+'%';total+=h;}
+    document.getElementById(b.lbl).textContent=((-90+(total/bars.length/100)*50).toFixed(0))+' dBm';
+  });
+}
+setInterval(animateRF,160); animateRF();
+
+// ══════════════════════════════════════════════
+// LOG
+// ══════════════════════════════════════════════
+const logSeed=[
+  {msg:'ALERT: DJI OcuSync detected — 2.4GHz',type:'alert'},
+  {msg:'UAS-009 bearing update: 043°',type:'warn'},
+  {msg:'RF scan pass complete — 5 bands',type:'ok'},
+  {msg:'WARNING: Unknown RF 915MHz burst',type:'warn'},
+  {msg:'Oracle-1 classifier: 94% confidence',type:'ok'},
+  {msg:'Oracle-2 range check nominal',type:'ok'},
+  {msg:'UAS-007 signal: -63dBm',type:''},
+  {msg:'Oracle-3 GPS sync degraded',type:'warn'},
+  {msg:'SDR buffer cleared',type:''},
+  {msg:'All clear 433MHz band',type:'ok'},
+];
+const logEl=document.getElementById('logLines');
+function addLog(e){
+  const div=document.createElement('div');
+  div.className='log-line';
+  const n=new Date();
+  const t=`${String(n.getUTCHours()).padStart(2,'0')}:${String(n.getUTCMinutes()).padStart(2,'0')}:${String(n.getUTCSeconds()).padStart(2,'0')}`;
+  div.innerHTML=`<span class="log-t">${t}</span><span class="log-msg ${e.type}">${e.msg}</span>`;
+  logEl.insertBefore(div,logEl.firstChild);
+  if(logEl.children.length>40)logEl.removeChild(logEl.lastChild);
+}
+logSeed.forEach(m=>addLog(m));
+const livePool=[
+  {msg:'RF scan pass complete',type:'ok'},
+  {msg:'Classifier pass — no new signatures',type:''},
+  {msg:'UAS-009 bearing update',type:''},
+  {msg:'SDR sample rate nominal',type:'ok'},
+  {msg:'Oracle-1 uptime check OK',type:'ok'},
+  {msg:'Checking 2.4GHz band…',type:''},
+  {msg:'Budapest sector clear',type:'ok'},
+];
+setInterval(()=>addLog(livePool[Math.floor(Math.random()*livePool.length)]),3200);
+
+// ══════════════════════════════════════════════
+// CLOCK
+// ══════════════════════════════════════════════
+const DAYS=['SUN','MON','TUE','WED','THU','FRI','SAT'];
+const MONS=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+function tick(){
+  const n=new Date();
+  document.getElementById('clk').textContent=String(n.getUTCHours()).padStart(2,'0')+':'+String(n.getUTCMinutes()).padStart(2,'0')+':'+String(n.getUTCSeconds()).padStart(2,'0')+' UTC';
+  document.getElementById('clkd').textContent=DAYS[n.getDay()]+' '+String(n.getDate()).padStart(2,'0')+' '+MONS[n.getMonth()]+' '+n.getFullYear();
+}
+setInterval(tick,1000);tick();
+
+// ══════════════════════════════════════════════
+// TABS
+// ══════════════════════════════════════════════
+function switchTab(name,btn){
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  btn.classList.add('active');
+}
+</script>
+</body>
+</html>
