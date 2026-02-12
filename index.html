@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aeroguard Oracle — Operations Center</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Saira+Condensed:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root {
+  --void: #05080d;
+  --deep: #080d14;
+  --panel: #0b1018;
+  --card: #0e1520;
+  --lift: #121a26;
+  --edge: rgba(0,200,255,0.12);
+  --edge2: rgba(0,200,255,0.22);
+  --edge3: rgba(0,200,255,0.45);
+  --cyan: #00c8ff;
+  --cyan2: #00e5ff;
+  --cyan-dim: rgba(0,200,255,0.08);
+  --cyan-glow: rgba(0,200,255,0.35);
+  --red: #ff3b3b;
+  --red-dim: rgba(255,59,59,0.10);
+  --red-glow: rgba(255,59,59,0.4);
+  --amber: #ffaa00;
+  --amber-dim: rgba(255,170,0,0.10);
+  --green: #00ff88;
+  --green-dim: rgba(0,255,136,0.10);
+  --pilot: #c87eff;
+  --pilot-dim: rgba(200,126,255,0.12);
+  --pilot-glow: rgba(200,126,255,0.4);
+  --t1: #e8f4ff;
+  --t2: #7ea8c8;
+  --t3: #3a5870;
+  --t4: #1e3045;
+  --fd: 'Rajdhani', sans-serif;
+  --fm: 'Share Tech Mono', monospace;
+  --fs: 'Saira Condensed', sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--void);}
+
+/* ════════════════════════════════════
+   SCANLINE OVERLAY
+════════════════════════════════════ */
+body::after{
+  content:'';position:fixed;inset:0;z-index:9000;pointer-events:none;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.06) 2px,rgba(0,0,0,0.06) 4px);
+}
+
+/* ════════════════════════════════════
+   HEADER
+════════════════════════════════════ */
+.hdr{
+  position:fixed;top:0;left:0;right:0;height:56px;z-index:2000;
+  background:var(--deep);
+  border-bottom:1px solid var(--edge3);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 20px;
+  box-shadow:0 0 30px rgba(0,200,255,0.08);
+}
+.hdr::before{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--cyan),transparent);
+  opacity:0.6;
+}
+
+.hdr-logo{display:flex;align-items:center;gap:14px;}
+.logo-hex{
+  width:36px;height:36px;
+  background:var(--cyan-dim);
+  border:1px solid var(--edge3);
+  display:flex;align-items:center;justify-content:center;
+  clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);
+}
+.logo-inner{
+  width:16px;height:16px;
+  border:2px solid var(--cyan);
+  border-radius:50%;
+  position:relative;
+  display:flex;align-items:center;justify-content:center;
+}
+.logo-inner::after{content:'';width:5px;height:5px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan);}
+.logo-text{
+  font-family:var(--fd);font-size:22px;font-weight:700;
+  letter-spacing:5px;text-transform:uppercase;
+  color:var(--t1);
+  text-shadow:0 0 20px rgba(0,200,255,0.3);
+}
+.logo-text span{color:var(--cyan);}
+.logo-sub{
+  font-family:var(--fm);font-size:9px;letter-spacing:3px;
+  color:var(--cyan);opacity:0.7;margin-top:1px;
+  text-transform:uppercase;
+}
+
+.hdr-stats{display:flex;align-items:center;gap:2px;}
+.hstat{
+  display:flex;flex-direction:column;align-items:center;
+  padding:6px 18px;
+  border-left:1px solid var(--edge);
+  min-width:90px;
+}
+.hstat:last-child{border-right:1px solid var(--edge);}
+.hstat-n{font-family:var(--fm);font-size:22px;font-weight:500;line-height:1;}
+.hstat-n.red{color:var(--red);text-shadow:0 0 12px var(--red-glow);}
+.hstat-n.amber{color:var(--amber);}
+.hstat-n.cyan{color:var(--cyan);text-shadow:0 0 12px var(--cyan-glow);}
+.hstat-n.green{color:var(--green);}
+.hstat-l{font-family:var(--fm);font-size:8px;letter-spacing:1.5px;color:var(--t3);margin-top:3px;text-transform:uppercase;}
+
+.hdr-right{display:flex;align-items:center;gap:16px;}
+.sys-pill{
+  display:flex;align-items:center;gap:8px;
+  font-family:var(--fm);font-size:10px;letter-spacing:2px;
+  color:var(--green);
+  background:var(--green-dim);
+  border:1px solid rgba(0,255,136,0.2);
+  padding:6px 14px;
+  text-transform:uppercase;
+}
+.dot-pulse{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 1.6s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.3;transform:scale(0.7)}}
+.hdr-time{font-family:var(--fm);font-size:13px;color:var(--t2);text-align:right;}
+.hdr-date{font-family:var(--fm);font-size:9px;color:var(--t3);margin-top:1px;letter-spacing:1px;}
+
+/* ════════════════════════════════════
+   LAYOUT — map + two side panels
+════════════════════════════════════ */
+.layout{
+  position:fixed;top:56px;left:0;right:0;bottom:0;
+  display:grid;
+  grid-template-columns:300px 1fr 300px;
+}
+
+/* ════════════════════════════════════
+   SIDE PANELS
+════════════════════════════════════ */
+.side{
+  background:var(--panel);
+  overflow-y:auto;
+  display:flex;flex-direction:column;
+}
+.side-l{border-right:1px solid var(--edge2);}
+.side-r{border-left:1px solid var(--edge2);}
+
+/* scrollbar */
+::-webkit-scrollbar{width:3px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--edge2);border-radius:2px;}
+
+/* Section header */
+.sec{
+  padding:10px 14px 8px;
+  border-bottom:1px solid var(--edge);
+  background:var(--deep);
+  flex-shrink:0;
+}
+.sec-title{
+  font-family:var(--fd);font-size:11px;font-weight:700;
+  letter-spacing:3px;text-transform:uppercase;
+  color:var(--cyan);
+  display:flex;align-items:center;gap:8px;
+}
+.sec-title::before{content:'';width:3px;height:12px;background:var(--cyan);box-shadow:0 0 8px var(--cyan-glow);display:block;}
+.sec-badge{
+  font-family:var(--fm);font-size:8px;letter-spacing:1px;
+  padding:2px 7px;border:1px solid;margin-left:auto;
+}
+.sec-badge.red{color:var(--red);border-color:rgba(255,59,59,0.3);background:var(--red-dim);}
+.sec-badge.green{color:var(--green);border-color:rgba(0,255,136,0.25);background:var(--green-dim);}
+.sec-badge.cyan{color:var(--cyan);border-color:var(--edge2);background:var(--cyan-dim);}
+
+.sec-body{padding:10px;}
+
+/* ════════════════════════════════════
+   THREAT CARDS
+════════════════════════════════════ */
+.tcard{
+  background:var(--card);
+  border:1px solid var(--edge);
+  border-left:3px solid transparent;
+  padding:12px;margin-bottom:8px;
+  cursor:pointer;
+  transition:all 0.2s;
+  position:relative;
+}
+.tcard.high{border-left-color:var(--red);}
+.tcard.med{border-left-color:var(--amber);}
+.tcard.low{border-left-color:var(--green);}
+.tcard:hover,.tcard.active{border-color:var(--edge3);background:var(--lift);}
+.tcard.active{box-shadow:0 0 16px rgba(0,200,255,0.1);}
+
+.tcard-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.tcard-id{font-family:var(--fd);font-size:16px;font-weight:700;letter-spacing:1.5px;color:var(--t1);}
+.threat-pill{font-family:var(--fm);font-size:8px;letter-spacing:1.5px;padding:3px 8px;border:1px solid;text-transform:uppercase;}
+.threat-pill.high{color:var(--red);border-color:rgba(255,59,59,0.35);background:var(--red-dim);}
+.threat-pill.med{color:var(--amber);border-color:rgba(255,170,0,0.3);background:var(--amber-dim);}
+.threat-pill.low{color:var(--green);border-color:rgba(0,255,136,0.25);background:var(--green-dim);}
+
+.tcard-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.tfield{display:flex;flex-direction:column;gap:2px;}
+.tfield-l{font-family:var(--fm);font-size:8px;letter-spacing:1px;color:var(--t3);text-transform:uppercase;}
+.tfield-v{font-family:var(--fm);font-size:11px;color:var(--t2);}
+.tfield-v.hot{color:var(--amber);}
+.tfield-v.dist{color:var(--cyan);}
+.tfield-v.red{color:var(--red);}
+
+/* Pilot section within card */
+.pilot-strip{
+  margin-top:10px;padding:8px 10px;
+  background:var(--deep);
+  border:1px solid rgba(200,126,255,0.15);
+  border-left:3px solid var(--pilot);
+}
+.pilot-strip-title{
+  font-family:var(--fm);font-size:8px;letter-spacing:2px;
+  color:var(--pilot);text-transform:uppercase;margin-bottom:6px;
+  display:flex;align-items:center;gap:6px;
+}
+.pilot-strip-title::before{content:'◈';font-size:8px;}
+.pilot-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 8px;}
+.pfield{display:flex;flex-direction:column;gap:1px;}
+.pfield-l{font-family:var(--fm);font-size:8px;letter-spacing:1px;color:var(--t4);text-transform:uppercase;}
+.pfield-v{font-family:var(--fm);font-size:10px;color:rgba(200,126,255,0.8);}
+
+/* dist bars */
+.dbar-wrap{margin-top:8px;}
+.dbar-label{display:flex;justify-content:space-between;font-family:var(--fm);font-size:8px;color:var(--t3);margin-bottom:3px;}
+.dbar-track{height:3px;background:var(--lift);border:1px solid var(--edge);}
+.dbar-fill{height:100%;transition:width 0.5s;}
+
+/* ════════════════════════════════════
+   ORACLE UNIT CARDS
+════════════════════════════════════ */
+.ocard{
+  background:var(--card);border:1px solid var(--edge);
+  border-top:2px solid var(--cyan);
+  padding:12px;margin-bottom:8px;
+}
+.ocard.degraded{border-top-color:var(--amber);}
+.ocard-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.ocard-name{font-family:var(--fd);font-size:16px;font-weight:700;letter-spacing:2px;color:var(--cyan);display:flex;align-items:center;gap:8px;}
+.ocard-name.degraded{color:var(--amber);}
+.ocard-name::before{content:'◉';font-size:10px;}
+.ostatus{font-family:var(--fm);font-size:8px;letter-spacing:1.5px;padding:3px 8px;border:1px solid;text-transform:uppercase;}
+.ostatus.nominal{color:var(--green);border-color:rgba(0,255,136,0.25);background:var(--green-dim);}
+.ostatus.degraded{color:var(--amber);border-color:rgba(255,170,0,0.25);background:var(--amber-dim);}
+.ocard-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;}
+.ofield{display:flex;flex-direction:column;gap:2px;}
+.ofield-l{font-family:var(--fm);font-size:8px;letter-spacing:1px;color:var(--t3);text-transform:uppercase;}
+.ofield-v{font-family:var(--fm);font-size:11px;color:var(--t2);}
+.ofield-v.live{color:var(--green);}
+.ofield-v.warn{color:var(--amber);}
+
+/* signal quality */
+.sigq{display:flex;align-items:flex-end;gap:2px;height:16px;}
+.sigq-bar{width:5px;border-radius:1px 1px 0 0;background:var(--t4);}
+.sigq-bar.on{background:var(--green);}
+.sigq-bar.warn{background:var(--amber);}
+
+/* ════════════════════════════════════
+   RF SPECTRUM
+════════════════════════════════════ */
+.rf-band{margin-bottom:12px;}
+.rf-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;}
+.rf-name{font-family:var(--fm);font-size:10px;letter-spacing:1.5px;color:var(--t2);}
+.rf-name.hot{color:var(--amber);}
+.rf-dbm{font-family:var(--fm);font-size:9px;color:var(--t3);}
+.rf-bars{display:flex;align-items:flex-end;gap:1px;height:48px;background:var(--deep);padding:4px 4px 0;border:1px solid var(--edge);}
+.rf-bar{flex:1;min-height:3px;border-radius:1px 1px 0 0;transition:height 0.15s ease;}
+
+/* ════════════════════════════════════
+   LOG
+════════════════════════════════════ */
+.logline{
+  display:flex;gap:10px;padding:5px 0;
+  border-bottom:1px solid rgba(0,200,255,0.04);
+  font-family:var(--fm);font-size:10px;
+}
+.log-t{color:var(--t3);flex-shrink:0;width:62px;}
+.log-m{color:var(--t2);}
+.log-m.alert{color:var(--red);}
+.log-m.warn{color:var(--amber);}
+.log-m.ok{color:var(--green);}
+
+/* ════════════════════════════════════
+   MAP
+════════════════════════════════════ */
+#mapwrap{position:relative;overflow:hidden;}
+#map{position:absolute;inset:0;}
+#radarCanvas{position:absolute;inset:0;z-index:10;pointer-events:none;}
+
+/* ════════════════════════════════════
+   MAP BOTTOM BAR
+════════════════════════════════════ */
+.map-bar{
+  position:absolute;bottom:0;left:0;right:0;height:32px;z-index:50;
+  background:rgba(5,8,13,0.92);
+  border-top:1px solid var(--edge2);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 14px;
+  font-family:var(--fm);font-size:9px;letter-spacing:1.5px;color:var(--t3);
+}
+.map-bar-item{display:flex;align-items:center;gap:6px;}
+.legend-dot{width:8px;height:8px;border-radius:50%;}
+
+/* ════════════════════════════════════
+   LEAFLET OVERRIDES
+════════════════════════════════════ */
+.leaflet-control-zoom,.leaflet-control-attribution{display:none!important;}
+.leaflet-popup-content-wrapper{
+  background:rgba(8,13,20,0.97)!important;
+  border:1px solid var(--edge3)!important;
+  border-radius:0!important;
+  color:var(--t1)!important;
+  box-shadow:0 0 24px rgba(0,200,255,0.15)!important;
+  backdrop-filter:blur(12px);
+}
+.leaflet-popup-tip{background:rgba(8,13,20,0.97)!important;}
+.leaflet-popup-content{margin:12px 16px!important;font-family:'Share Tech Mono',monospace;font-size:11px;line-height:1.7;}
+
+/* ════════════════════════════════════
+   ALERT SYSTEM
+════════════════════════════════════ */
+
+/* Full-screen flash overlay */
+.alert-flash{
+  position:fixed;inset:0;z-index:8000;pointer-events:none;
+  background:rgba(255,59,59,0.0);
+  transition:background 0.1s;
+}
+.alert-flash.bang{background:rgba(255,59,59,0.12);}
+
+/* Alert banner — slides in from top */
+.alert-banner{
+  position:fixed;top:56px;left:50%;transform:translateX(-50%) translateY(-120%);
+  z-index:7000;
+  min-width:520px;max-width:700px;
+  background:var(--deep);
+  border:1px solid var(--red);
+  border-top:3px solid var(--red);
+  box-shadow:0 0 40px rgba(255,59,59,0.35),0 4px 32px rgba(0,0,0,0.8);
+  transition:transform 0.35s cubic-bezier(0.16,1,0.3,1);
+  overflow:hidden;
+}
+.alert-banner.show{transform:translateX(-50%) translateY(0);}
+
+.alert-banner-top{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 16px;
+  border-bottom:1px solid rgba(255,59,59,0.2);
+  background:rgba(255,59,59,0.06);
+}
+.alert-icon{
+  width:32px;height:32px;flex-shrink:0;
+  border:2px solid var(--red);
+  display:flex;align-items:center;justify-content:center;
+  animation:alertIconPulse 0.8s ease-in-out infinite;
+}
+@keyframes alertIconPulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(255,59,59,0.6);}
+  50%{box-shadow:0 0 0 8px rgba(255,59,59,0);}
+}
+.alert-icon-sym{
+  font-family:var(--fm);font-size:14px;color:var(--red);
+  animation:blink 0.6s step-start infinite;
+}
+.alert-title-wrap{flex:1;}
+.alert-title{
+  font-family:var(--fd);font-size:18px;font-weight:700;
+  letter-spacing:2px;color:var(--red);text-transform:uppercase;
+  text-shadow:0 0 12px rgba(255,59,59,0.5);
+}
+.alert-subtitle{font-family:var(--fm);font-size:10px;letter-spacing:1.5px;color:var(--t2);margin-top:2px;}
+.alert-close{
+  background:none;border:1px solid rgba(255,59,59,0.3);
+  color:var(--t3);font-family:var(--fm);font-size:10px;
+  padding:4px 10px;cursor:pointer;letter-spacing:1px;
+  transition:all 0.2s;
+}
+.alert-close:hover{color:var(--t1);border-color:var(--red);}
+.alert-mute-btn{
+  background:none;border:1px solid var(--edge2);
+  color:var(--t3);font-family:var(--fm);font-size:10px;
+  padding:4px 10px;cursor:pointer;letter-spacing:1px;
+  transition:all 0.2s;
+}
+.alert-mute-btn:hover{color:var(--t2);border-color:var(--edge3);}
+.alert-mute-btn.muted{color:var(--amber);border-color:rgba(255,170,0,0.3);}
+
+.alert-body{padding:12px 16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+.afield{display:flex;flex-direction:column;gap:3px;}
+.afield-l{font-family:var(--fm);font-size:8px;letter-spacing:1.5px;color:var(--t3);text-transform:uppercase;}
+.afield-v{font-family:var(--fm);font-size:12px;color:var(--t1);}
+.afield-v.red{color:var(--red);}
+.afield-v.amber{color:var(--amber);}
+.afield-v.cyan{color:var(--cyan);}
+
+.alert-progress{height:2px;background:var(--lift);}
+.alert-progress-fill{height:100%;background:var(--red);width:100%;transition:width linear;}
+
+/* Alert history tray (bottom of left panel) */
+.alert-tray{flex-shrink:0;}
+.atray-item{
+  display:flex;align-items:center;gap:10px;
+  padding:7px 14px;
+  border-bottom:1px solid var(--edge);
+  font-family:var(--fm);font-size:10px;
+  cursor:pointer;transition:background 0.15s;
+}
+.atray-item:hover{background:var(--lift);}
+.atray-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.atray-dot.high{background:var(--red);box-shadow:0 0 6px var(--red);}
+.atray-dot.med{background:var(--amber);}
+.atray-dot.low{background:var(--green);}
+.atray-id{color:var(--t1);width:60px;flex-shrink:0;}
+.atray-msg{color:var(--t2);flex:1;}
+.atray-time{color:var(--t3);flex-shrink:0;}
+
+/* Header alert counter badge */
+.hdr-alert-btn{
+  display:flex;align-items:center;gap:8px;
+  font-family:var(--fm);font-size:10px;letter-spacing:2px;
+  color:var(--red);background:var(--red-dim);
+  border:1px solid rgba(255,59,59,0.3);
+  padding:6px 14px;cursor:pointer;
+  transition:all 0.2s;
+  animation:alertBtnPulse 2s ease-in-out infinite;
+}
+@keyframes alertBtnPulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(255,59,59,0.4);}
+  50%{box-shadow:0 0 0 6px rgba(255,59,59,0);}
+}
+.hdr-alert-btn:hover{background:rgba(255,59,59,0.15);}
+.alert-count{
+  background:var(--red);color:white;
+  font-family:var(--fm);font-size:9px;
+  padding:1px 6px;min-width:18px;text-align:center;
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════ ALERT FLASH OVERLAY ═══════ -->
+<div class="alert-flash" id="alertFlash"></div>
+
+<!-- ═══════ ALERT BANNER ═══════ -->
+<div class="alert-banner" id="alertBanner">
+  <div class="alert-banner-top">
+    <div class="alert-icon"><div class="alert-icon-sym">⚠</div></div>
+    <div class="alert-title-wrap">
+      <div class="alert-title" id="alertBannerTitle">NEW THREAT DETECTED</div>
+      <div class="alert-subtitle" id="alertBannerSub">Oracle Detection Network · Budapest Sector</div>
+    </div>
+    <button class="alert-mute-btn" id="alertMuteBtn" onclick="toggleMute()">🔊 SOUND ON</button>
+    <button class="alert-close" onclick="dismissAlert()">DISMISS</button>
+  </div>
+  <div class="alert-body" id="alertBannerBody"></div>
+  <div class="alert-progress"><div class="alert-progress-fill" id="alertProgress"></div></div>
+</div>
+
+<!-- ═══════ HEADER ═══════ -->
+<header class="hdr">
+  <div class="hdr-logo">
+    <div class="logo-hex"><div class="logo-inner"></div></div>
+    <div>
+      <div class="logo-text">AERO<span>GUARD</span></div>
+      <div class="logo-sub">Oracle Detection Network · Budapest Sector</div>
+    </div>
+  </div>
+
+  <div class="hdr-stats">
+    <div class="hstat"><div class="hstat-n red">3</div><div class="hstat-l">Threats</div></div>
+    <div class="hstat"><div class="hstat-n amber">3</div><div class="hstat-l">Pilots Located</div></div>
+    <div class="hstat"><div class="hstat-n cyan">3</div><div class="hstat-l">Oracle Units</div></div>
+    <div class="hstat"><div class="hstat-n green">15km</div><div class="hstat-l">Range</div></div>
+  </div>
+
+  <div class="hdr-right">
+    <div class="sys-pill"><div class="dot-pulse"></div>SYSTEMS NOMINAL</div>
+    <button class="hdr-alert-btn" id="alertHeaderBtn" onclick="showAlertPanel()">
+      ⚠ ALERTS <span class="alert-count" id="alertHeaderCount">3</span>
+    </button>
+    <div>
+      <div class="hdr-time" id="clk">--:--:-- UTC</div>
+      <div class="hdr-date" id="clkd">---</div>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════ LAYOUT ═══════ -->
+<div class="layout">
+
+  <!-- ═══ LEFT PANEL ═══ -->
+  <aside class="side side-l">
+
+    <!-- THREATS -->
+    <div class="sec">
+      <div class="sec-title">Active Threats <div class="sec-badge red">3 TRACKING</div></div>
+    </div>
+    <div class="sec-body" id="threatList"></div>
+
+    <!-- ALERT HISTORY -->
+    <div class="sec" style="margin-top:4px">
+      <div class="sec-title">Alert History <div class="sec-badge red" id="alertHistoryCount">3 NEW</div></div>
+    </div>
+    <div class="alert-tray" id="alertTray"></div>
+
+  </aside>
+
+  <!-- ═══ MAP ═══ -->
+  <div id="mapwrap">
+    <div id="map"></div>
+    <canvas id="radarCanvas"></canvas>
+    <div class="map-bar">
+      <div class="map-bar-item"><div class="legend-dot" style="background:var(--red);box-shadow:0 0 6px var(--red)"></div>Drone (UAS)</div>
+      <div class="map-bar-item"><div class="legend-dot" style="background:var(--pilot);box-shadow:0 0 6px var(--pilot)"></div>Pilot Location</div>
+      <div class="map-bar-item"><div class="legend-dot" style="background:var(--cyan);box-shadow:0 0 6px var(--cyan)"></div>Oracle Unit</div>
+      <div class="map-bar-item" style="color:var(--t2)">ORACLE PROTECTED ZONE — 15km</div>
+      <div class="map-bar-item" id="zoomLbl" style="color:var(--cyan)">ZOOM 12</div>
+    </div>
+  </div>
+
+  <!-- ═══ RIGHT PANEL ═══ -->
+  <aside class="side side-r">
+
+    <!-- ORACLE UNITS -->
+    <div class="sec">
+      <div class="sec-title">Oracle Units <div class="sec-badge cyan">LIVE</div></div>
+    </div>
+    <div class="sec-body" id="oracleList"></div>
+
+    <!-- RF SPECTRUM -->
+    <div class="sec" style="margin-top:4px">
+      <div class="sec-title">RF Spectrum</div>
+    </div>
+    <div class="sec-body" id="rfPanel"></div>
+
+    <!-- LOG -->
+    <div class="sec" style="margin-top:4px">
+      <div class="sec-title">Scan Log <div class="sec-badge green">LIVE</div></div>
+    </div>
+    <div class="sec-body" id="logPanel"></div>
+
+  </aside>
+</div>
+
+<script>
+// ══════════════════════════════════════
+// DATA
+// ══════════════════════════════════════
+const CENTER = [47.5050, 19.0530];
+
+const oracleUnits = [
+  { id:'ORACLE-1', lat:47.5480, lng:19.0330, status:'NOMINAL',   freq:'2.4GHz / 5.8GHz', uptime:'14d 6h', range:15, detections:12 },
+  { id:'ORACLE-2', lat:47.4720, lng:18.9980, status:'NOMINAL',   freq:'433MHz / 915MHz',  uptime:'14d 6h', range:15, detections:4  },
+  { id:'ORACLE-3', lat:47.4700, lng:19.0980, status:'DEGRADED',  freq:'868MHz / 2.4GHz',  uptime:'2d 3h',  range:12, detections:1  },
+];
+
+// Each threat has a drone location AND a pilot location (pilot estimated nearby/ground)
+const threats = [
+  {
+    id:'UAS-009', level:'high',
+    drone:{ lat:47.5200, lng:19.0650 },
+    pilot:{ lat:47.5280, lng:19.0780, dist_from_drone:'1.2 km', confidence:'87%' },
+    proto:'DJI OcuSync 3', freq:'2.4 GHz', sig:'-48 dBm', bearing:'042°',
+    model:'DJI Matrice 300', status:'TRACKING', alt:'142m', speed:'14 m/s',
+  },
+  {
+    id:'UAS-007', level:'med',
+    drone:{ lat:47.4900, lng:19.0150 },
+    pilot:{ lat:47.4840, lng:19.0050, dist_from_drone:'0.9 km', confidence:'71%' },
+    proto:'Custom RF', freq:'915 MHz', sig:'-63 dBm', bearing:'218°',
+    model:'Unknown', status:'TRACKING', alt:'88m', speed:'8 m/s',
+  },
+  {
+    id:'UAS-012', level:'low',
+    drone:{ lat:47.5050, lng:19.0900 },
+    pilot:{ lat:47.5100, lng:19.0950, dist_from_drone:'0.7 km', confidence:'62%' },
+    proto:'Parrot CTRL', freq:'433 MHz', sig:'-72 dBm', bearing:'305°',
+    model:'Parrot Anafi', status:'MONITOR', alt:'35m', speed:'4 m/s',
+  },
+];
+
+function haversine(a,b,c,d){
+  const R=6371,dL=(c-a)*Math.PI/180,dl=(d-b)*Math.PI/180;
+  const x=Math.sin(dL/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dl/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+
+// ══════════════════════════════════════
+// MAP
+// ══════════════════════════════════════
+const map = L.map('map',{center:CENTER,zoom:12,zoomControl:false,attributionControl:false});
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19}).addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png',{maxZoom:19,opacity:0.6}).addTo(map);
+map.on('zoomend',()=>{ document.getElementById('zoomLbl').textContent='ZOOM '+map.getZoom(); });
+
+// ══════════════════════════════════════
+// ORACLE MARKERS + RANGE CIRCLES
+// ══════════════════════════════════════
+oracleUnits.forEach(u=>{
+  // Range circle
+  L.circle([u.lat,u.lng],{
+    radius:u.range*1000,
+    color:'#00c8ff',fillColor:'#00c8ff',
+    fillOpacity:0.03,weight:1.5,dashArray:'6 8',opacity:0.35
+  }).addTo(map);
+
+  const col = u.status==='NOMINAL'?'#00c8ff':'#ffaa00';
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="38" height="38" viewBox="0 0 38 38">
+    <circle cx="19" cy="19" r="17" fill="rgba(5,8,13,0.9)" stroke="${col}" stroke-width="1.5"/>
+    <circle cx="19" cy="19" r="10" fill="none" stroke="${col}" stroke-width="1" opacity="0.4"/>
+    <circle cx="19" cy="19" r="3.5" fill="${col}" filter="url(#g)"/>
+    <line x1="19" y1="2" x2="19" y2="9" stroke="${col}" stroke-width="2"/>
+    <line x1="19" y1="29" x2="19" y2="36" stroke="${col}" stroke-width="2"/>
+    <line x1="2" y1="19" x2="9" y2="19" stroke="${col}" stroke-width="2"/>
+    <line x1="29" y1="19" x2="36" y2="19" stroke="${col}" stroke-width="2"/>
+  </svg>`;
+  const icon=L.divIcon({html:svg,className:'',iconSize:[38,38],iconAnchor:[19,19]});
+  L.marker([u.lat,u.lng],{icon,zIndexOffset:100}).addTo(map)
+   .bindTooltip(`<span style="color:#00c8ff;letter-spacing:2px;font-weight:bold">${u.id}</span><br>Status: ${u.status}<br>Range: ${u.range}km<br>Freq: ${u.freq}`,{direction:'top',offset:[0,-20]});
+
+  // Label
+  const lbl=L.divIcon({
+    html:`<div style="font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2px;color:${col};background:rgba(5,8,13,0.88);padding:2px 7px;border:1px solid ${col}44;margin-top:22px;white-space:nowrap">${u.id}</div>`,
+    className:'',iconAnchor:[0,0]
+  });
+  L.marker([u.lat,u.lng],{icon:lbl,interactive:false}).addTo(map);
+});
+
+// Triangle outline between Oracle units
+const triPts = oracleUnits.map(u=>[u.lat,u.lng]);
+triPts.push(triPts[0]);
+L.polyline(triPts,{color:'#00c8ff',weight:1,opacity:0.2,dashArray:'4 10'}).addTo(map);
+
+// ══════════════════════════════════════
+// DRONE + PILOT MARKERS
+// ══════════════════════════════════════
+const levelCol = { high:'#ff3b3b', med:'#ffaa00', low:'#00ff88' };
+
+threats.forEach(t=>{
+  const c = levelCol[t.level];
+
+  // ── DRONE marker ──
+  const droneSvg=`<div style="position:relative;width:44px;height:44px">
+    <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44" style="position:absolute;inset:0">
+      <circle cx="22" cy="22" r="19" fill="none" stroke="${c}" stroke-width="1" opacity="0.25" style="animation:droneRing 2s ease-out infinite"/>
+    </svg>
+    <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44" style="position:absolute;inset:0">
+      <circle cx="22" cy="22" r="9" fill="rgba(5,8,13,0.92)" stroke="${c}" stroke-width="2.5"/>
+      <circle cx="22" cy="22" r="3.5" fill="${c}"/>
+      <line x1="6" y1="6" x2="14" y2="14" stroke="${c}" stroke-width="2" opacity="0.8"/>
+      <line x1="38" y1="6" x2="30" y2="14" stroke="${c}" stroke-width="2" opacity="0.8"/>
+      <line x1="6" y1="38" x2="14" y2="30" stroke="${c}" stroke-width="2" opacity="0.8"/>
+      <line x1="38" y1="38" x2="30" y2="30" stroke="${c}" stroke-width="2" opacity="0.8"/>
+      <circle cx="6" cy="6" r="3.5" fill="${c}"/>
+      <circle cx="38" cy="6" r="3.5" fill="${c}"/>
+      <circle cx="6" cy="38" r="3.5" fill="${c}"/>
+      <circle cx="38" cy="38" r="3.5" fill="${c}"/>
+    </svg>
+  </div>`;
+  const droneIcon=L.divIcon({html:droneSvg,className:'',iconSize:[44,44],iconAnchor:[22,22]});
+  L.marker([t.drone.lat,t.drone.lng],{icon:droneIcon,zIndexOffset:200}).addTo(map)
+   .bindTooltip(`<span style="color:${c};letter-spacing:1.5px;font-weight:bold">${t.id} — ${t.level.toUpperCase()}</span><br>Model: ${t.model}<br>Freq: ${t.freq} · ${t.sig}<br>Alt: ${t.alt} · Speed: ${t.speed}`,{direction:'top',offset:[0,-24]});
+
+  // Drone label
+  const dLbl=L.divIcon({
+    html:`<div style="font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1.5px;color:${c};background:rgba(5,8,13,0.9);padding:2px 7px;border:1px solid ${c}50;margin-top:24px;white-space:nowrap">${t.id} · ${t.level.toUpperCase()}</div>`,
+    className:'',iconAnchor:[0,0]
+  });
+  L.marker([t.drone.lat,t.drone.lng],{icon:dLbl,interactive:false,zIndexOffset:201}).addTo(map);
+
+  // ── PILOT marker ──
+  const pilotSvg=`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="34" viewBox="0 0 28 34">
+    <polygon points="14,2 26,22 14,32 2,22" fill="rgba(5,8,13,0.92)" stroke="#c87eff" stroke-width="2"/>
+    <circle cx="14" cy="18" r="4" fill="#c87eff"/>
+    <line x1="14" y1="32" x2="14" y2="38" stroke="#c87eff" stroke-width="1.5" opacity="0.5"/>
+  </svg>`;
+  const pilotIcon=L.divIcon({html:pilotSvg,className:'',iconSize:[28,34],iconAnchor:[14,17]});
+  L.marker([t.pilot.lat,t.pilot.lng],{icon:pilotIcon,zIndexOffset:190}).addTo(map)
+   .bindTooltip(`<span style="color:#c87eff;letter-spacing:1.5px;font-weight:bold">PILOT · ${t.id}</span><br>Est. distance from drone: ${t.pilot.dist_from_drone}<br>Detection confidence: ${t.pilot.confidence}`,{direction:'top',offset:[0,-20]});
+
+  // Pilot label
+  const pLbl=L.divIcon({
+    html:`<div style="font-family:'Share Tech Mono',monospace;font-size:8px;letter-spacing:1.5px;color:#c87eff;background:rgba(5,8,13,0.9);padding:2px 7px;border:1px solid #c87eff44;margin-top:20px;white-space:nowrap">PILOT · ${t.id}</div>`,
+    className:'',iconAnchor:[0,0]
+  });
+  L.marker([t.pilot.lat,t.pilot.lng],{icon:pLbl,interactive:false,zIndexOffset:191}).addTo(map);
+
+  // ── Drone-to-Pilot line ──
+  L.polyline([[t.drone.lat,t.drone.lng],[t.pilot.lat,t.pilot.lng]],{
+    color:'#c87eff',weight:1.5,opacity:0.45,dashArray:'3 6'
+  }).addTo(map);
+
+  // ── Drone-to-Oracle distance lines ──
+  oracleUnits.forEach(u=>{
+    const dist=haversine(t.drone.lat,t.drone.lng,u.lat,u.lng);
+    const inR=dist<=u.range;
+    L.polyline([[t.drone.lat,t.drone.lng],[u.lat,u.lng]],{
+      color:inR?c:'#2a3a4a',weight:inR?1.2:0.7,opacity:inR?0.35:0.15,dashArray:'4 8'
+    }).addTo(map);
+    // midpoint label
+    const ml=L.divIcon({
+      html:`<div style="font-family:'Share Tech Mono',monospace;font-size:8px;color:${inR?'#00c8ff':'#2a3a4a'};background:rgba(5,8,13,0.85);padding:1px 5px;border:1px solid ${inR?'#00c8ff33':'#2a3a4a'};white-space:nowrap">${dist.toFixed(1)}km</div>`,
+      className:'',iconAnchor:[16,7]
+    });
+    L.marker([(t.drone.lat+u.lat)/2,(t.drone.lng+u.lng)/2],{icon:ml,interactive:false}).addTo(map);
+  });
+});
+
+// ══════════════════════════════════════
+// RADAR CANVAS
+// ══════════════════════════════════════
+const rc=document.getElementById('radarCanvas');
+const rctx=rc.getContext('2d');
+let sweep=0;
+
+function resizeRC(){
+  const wrap=document.getElementById('mapwrap');
+  rc.width=wrap.offsetWidth;
+  rc.height=wrap.offsetHeight;
+}
+window.addEventListener('resize',()=>{resizeRC();});
+resizeRC();
+
+function lp(lat,lng){const p=map.latLngToContainerPoint(L.latLng(lat,lng));return{x:p.x,y:p.y};}
+
+function centroid(){
+  const lat=(oracleUnits[0].lat+oracleUnits[1].lat+oracleUnits[2].lat)/3;
+  const lng=(oracleUnits[0].lng+oracleUnits[1].lng+oracleUnits[2].lng)/3;
+  return lp(lat,lng);
+}
+
+function radarR(){
+  const c2={lat:(oracleUnits[0].lat+oracleUnits[1].lat+oracleUnits[2].lat)/3,lng:(oracleUnits[0].lng+oracleUnits[1].lng+oracleUnits[2].lng)/3};
+  const cPx=lp(c2.lat,c2.lng);
+  return oracleUnits.reduce((s,u)=>{
+    const p=lp(u.lat,u.lng);
+    return s+Math.sqrt((p.x-cPx.x)**2+(p.y-cPx.y)**2);
+  },0)/3*1.15;
+}
+
+function drawRadar(){
+  rctx.clearRect(0,0,rc.width,rc.height);
+  const c=centroid();
+  const R=radarR();
+  if(R<10) return;
+
+  // protected zone polygon
+  const verts=oracleUnits.map(u=>lp(u.lat,u.lng));
+  rctx.save();
+  rctx.beginPath();
+  rctx.moveTo(verts[0].x,verts[0].y);
+  rctx.lineTo(verts[1].x,verts[1].y);
+  rctx.lineTo(verts[2].x,verts[2].y);
+  rctx.closePath();
+  rctx.fillStyle='rgba(0,200,255,0.07)';
+  rctx.fill();
+  rctx.strokeStyle='rgba(0,200,255,0.6)';
+  rctx.lineWidth=1.5;
+  rctx.setLineDash([5,8]);
+  rctx.stroke();
+  rctx.setLineDash([]);
+  rctx.restore();
+
+  // compute km-per-pixel
+  const p0=lp(oracleUnits[0].lat,oracleUnits[0].lng);
+  const p1=lp(oracleUnits[1].lat,oracleUnits[1].lng);
+  const pxDist=Math.sqrt((p0.x-p1.x)**2+(p0.y-p1.y)**2);
+  const kmDist=haversine(oracleUnits[0].lat,oracleUnits[0].lng,oracleUnits[1].lat,oracleUnits[1].lng);
+  const kpp=pxDist>0?kmDist/pxDist:0;
+
+  // rings
+  for(let i=1;i<=5;i++){
+    const r=R*i/5;
+    rctx.save();
+    rctx.beginPath();
+    rctx.arc(c.x,c.y,r,0,Math.PI*2);
+    rctx.strokeStyle=`rgba(0,200,255,${0.12+i*0.07})`;
+    rctx.lineWidth=i===5?1.5:0.8;
+    rctx.setLineDash(i===5?[]:[3,6]);
+    rctx.stroke();
+    rctx.setLineDash([]);
+    rctx.restore();
+    if(kpp>0){
+      const km=(r*kpp).toFixed(0);
+      rctx.save();
+      rctx.font="bold 9px 'Share Tech Mono'";
+      rctx.fillStyle='rgba(0,200,255,0.7)';
+      rctx.fillText(km+' km',c.x+r+5,c.y+4);
+      rctx.restore();
+    }
+  }
+
+  // crosshairs
+  rctx.save();
+  rctx.strokeStyle='rgba(0,200,255,0.18)';
+  rctx.lineWidth=1;rctx.setLineDash([2,10]);
+  rctx.beginPath();rctx.moveTo(c.x-R,c.y);rctx.lineTo(c.x+R,c.y);rctx.stroke();
+  rctx.beginPath();rctx.moveTo(c.x,c.y-R);rctx.lineTo(c.x,c.y+R);rctx.stroke();
+  rctx.setLineDash([]);rctx.restore();
+
+  // sweep trail
+  rctx.save();
+  rctx.translate(c.x,c.y);
+  const steps=24;
+  const tw=1.4;
+  for(let s=0;s<steps;s++){
+    const a0=sweep-tw+(tw/steps)*s;
+    const a1=sweep-tw+(tw/steps)*(s+1);
+    rctx.beginPath();rctx.moveTo(0,0);rctx.arc(0,0,R,a0,a1);rctx.closePath();
+    rctx.fillStyle=`rgba(0,200,255,${(s/steps)*0.5})`;
+    rctx.fill();
+  }
+  // sweep line
+  rctx.beginPath();rctx.moveTo(0,0);
+  rctx.lineTo(Math.cos(sweep)*R,Math.sin(sweep)*R);
+  rctx.strokeStyle='rgba(0,229,255,1)';
+  rctx.lineWidth=2;
+  rctx.shadowColor='rgba(0,200,255,1)';
+  rctx.shadowBlur=14;
+  rctx.stroke();
+  rctx.shadowBlur=0;
+  rctx.restore();
+
+  // drone blips
+  threats.forEach(t=>{
+    const dp=lp(t.drone.lat,t.drone.lng);
+    const col=levelCol[t.level];
+    const pulse=(Math.sin(Date.now()/400)+1)/2;
+    rctx.save();
+    rctx.beginPath();rctx.arc(dp.x,dp.y,10+pulse*8,0,Math.PI*2);
+    rctx.strokeStyle=col;rctx.lineWidth=1.5;
+    rctx.globalAlpha=0.4+pulse*0.35;rctx.stroke();rctx.globalAlpha=1;
+    rctx.beginPath();rctx.arc(dp.x,dp.y,5,0,Math.PI*2);
+    rctx.fillStyle=col;rctx.shadowColor=col;rctx.shadowBlur=14;
+    rctx.fill();rctx.shadowBlur=0;rctx.restore();
+  });
+
+  // pilot blips on radar
+  threats.forEach(t=>{
+    const pp=lp(t.pilot.lat,t.pilot.lng);
+    rctx.save();
+    rctx.beginPath();rctx.arc(pp.x,pp.y,4,0,Math.PI*2);
+    rctx.fillStyle='#c87eff';rctx.shadowColor='#c87eff';rctx.shadowBlur=10;
+    rctx.fill();rctx.shadowBlur=0;rctx.restore();
+  });
+
+  // center
+  rctx.save();
+  rctx.beginPath();rctx.arc(c.x,c.y,5,0,Math.PI*2);
+  rctx.fillStyle='rgba(0,200,255,0.9)';rctx.shadowColor='#00c8ff';rctx.shadowBlur=14;
+  rctx.fill();rctx.shadowBlur=0;rctx.restore();
+
+  sweep+=0.013;
+  if(sweep>Math.PI*2)sweep-=Math.PI*2;
+}
+
+map.on('move',drawRadar);map.on('zoom',drawRadar);
+(function loop(){drawRadar();requestAnimationFrame(loop);})();
+
+// ══════════════════════════════════════
+// THREAT CARDS
+// ══════════════════════════════════════
+function buildThreats(){
+  const el=document.getElementById('threatList');
+  el.innerHTML='';
+  threats.forEach(t=>{
+    const c=levelCol[t.level];
+    const dists=oracleUnits.map(u=>({id:u.id,dist:haversine(t.drone.lat,t.drone.lng,u.lat,u.lng),range:u.range})).sort((a,b)=>a.dist-b.dist);
+    const nearest=dists[0];
+    const card=document.createElement('div');
+    card.className=`tcard ${t.level}`;
+    card.innerHTML=`
+      <div class="tcard-top">
+        <div class="tcard-id" style="color:${c}">${t.id}</div>
+        <div class="threat-pill ${t.level}">${t.level==='high'?'HIGH THREAT':t.level==='med'?'MEDIUM':'LOW'}</div>
+      </div>
+      <div class="tcard-grid">
+        <div class="tfield"><div class="tfield-l">Model</div><div class="tfield-v">${t.model}</div></div>
+        <div class="tfield"><div class="tfield-l">Frequency</div><div class="tfield-v hot">${t.freq}</div></div>
+        <div class="tfield"><div class="tfield-l">Signal</div><div class="tfield-v hot">${t.sig}</div></div>
+        <div class="tfield"><div class="tfield-l">Protocol</div><div class="tfield-v">${t.proto}</div></div>
+        <div class="tfield"><div class="tfield-l">Altitude</div><div class="tfield-v">${t.alt}</div></div>
+        <div class="tfield"><div class="tfield-l">Speed</div><div class="tfield-v">${t.speed}</div></div>
+        <div class="tfield"><div class="tfield-l">Nearest Oracle</div><div class="tfield-v dist">${nearest.id.replace('ORACLE-','ORC-')} · ${nearest.dist.toFixed(1)}km</div></div>
+        <div class="tfield"><div class="tfield-l">Bearing</div><div class="tfield-v">${t.bearing}</div></div>
+      </div>
+      <div class="dbar-wrap">
+        ${dists.map(d=>{
+          const pct=Math.min(100,(d.dist/15)*100);
+          const inR=d.dist<=d.range;
+          return `<div class="dbar-label"><span style="color:${inR?'#00c8ff':'var(--t3)'};">${d.id}</span><span>${d.dist.toFixed(1)}km${inR?' ✓':''}</span></div>
+          <div class="dbar-track"><div class="dbar-fill" style="width:${pct}%;background:${inR?'#00c8ff':'var(--t4)'}"></div></div>`;
+        }).join('')}
+      </div>
+      <div class="pilot-strip">
+        <div class="pilot-strip-title">Pilot Location Estimated</div>
+        <div class="pilot-grid">
+          <div class="pfield"><div class="pfield-l">Lat</div><div class="pfield-v">${t.pilot.lat.toFixed(4)}°N</div></div>
+          <div class="pfield"><div class="pfield-l">Lng</div><div class="pfield-v">${t.pilot.lng.toFixed(4)}°E</div></div>
+          <div class="pfield"><div class="pfield-l">Dist from Drone</div><div class="pfield-v">${t.pilot.dist_from_drone}</div></div>
+          <div class="pfield"><div class="pfield-l">Confidence</div><div class="pfield-v">${t.pilot.confidence}</div></div>
+        </div>
+      </div>`;
+    el.appendChild(card);
+  });
+}
+buildThreats();
+
+// ══════════════════════════════════════
+// ORACLE CARDS
+// ══════════════════════════════════════
+function buildOracle(){
+  const el=document.getElementById('oracleList');
+  el.innerHTML='';
+  oracleUnits.forEach(u=>{
+    const inRange=threats.filter(t=>haversine(t.drone.lat,t.drone.lng,u.lat,u.lng)<=u.range).length;
+    const isOk=u.status==='NOMINAL';
+    const bars=Array.from({length:7},(_,i)=>{
+      const on=i<(isOk?5:3);
+      return `<div class="sigq-bar ${on?(isOk?'on':'warn'):''}" style="height:${25+i*11}%"></div>`;
+    }).join('');
+    const card=document.createElement('div');
+    card.className=`ocard ${isOk?'':'degraded'}`;
+    card.innerHTML=`
+      <div class="ocard-top">
+        <div class="ocard-name ${isOk?'':'degraded'}">${u.id}</div>
+        <div class="ostatus ${isOk?'nominal':'degraded'}">${u.status}</div>
+      </div>
+      <div class="ocard-grid">
+        <div class="ofield"><div class="ofield-l">Range</div><div class="ofield-v live">${u.range} km</div></div>
+        <div class="ofield"><div class="ofield-l">Freq Bands</div><div class="ofield-v">${u.freq}</div></div>
+        <div class="ofield"><div class="ofield-l">Uptime</div><div class="ofield-v">${u.uptime}</div></div>
+        <div class="ofield"><div class="ofield-l">Detections</div><div class="ofield-v">${u.detections}</div></div>
+        <div class="ofield"><div class="ofield-l">Threats Active</div><div class="ofield-v ${inRange>0?'warn':' live'}">${inRange} in range</div></div>
+        <div class="ofield"><div class="ofield-l">Signal</div><div class="sigq">${bars}</div></div>
+      </div>`;
+    el.appendChild(card);
+  });
+}
+buildOracle();
+
+// ══════════════════════════════════════
+// RF SPECTRUM
+// ══════════════════════════════════════
+const rfBands=[
+  {name:'433 MHz', count:12, base:12, hot:false},
+  {name:'868 MHz', count:12, base:10, hot:false},
+  {name:'915 MHz', count:12, base:14, hot:false},
+  {name:'2.4 GHz', count:16, base:48, hot:true},
+  {name:'5.8 GHz', count:10, base:8,  hot:false},
+];
+const rfEl=document.getElementById('rfPanel');
+const rfRefs=[];
+rfBands.forEach((b,i)=>{
+  const wrap=document.createElement('div');
+  wrap.className='rf-band';
+  const dbmId=`rfdbm${i}`;
+  wrap.innerHTML=`<div class="rf-top"><span class="rf-name ${b.hot?'hot':''}">${b.name}${b.hot?' ⚠':''}</span><span class="rf-dbm" id="${dbmId}">—</span></div><div class="rf-bars" id="rfbars${i}"></div>`;
+  rfEl.appendChild(wrap);
+  const barsEl=document.getElementById(`rfbars${i}`);
+  const bars=[];
+  for(let j=0;j<b.count;j++){
+    const bar=document.createElement('div');
+    bar.className='rf-bar';
+    bar.style.background=b.hot?'#ffaa00':'#00c8ff';
+    bar.style.opacity=b.hot?'0.75':'0.55';
+    barsEl.appendChild(bar);bars.push(bar);
+  }
+  rfRefs.push({bars,dbmId,b});
+});
+function animRF(){
+  rfRefs.forEach(({bars,dbmId,b})=>{
+    let tot=0;
+    bars.forEach(bar=>{const h=b.base+Math.random()*(b.hot?44:18);bar.style.height=h+'%';tot+=h;});
+    document.getElementById(dbmId).textContent=((-90+(tot/bars.length/100)*52).toFixed(0))+' dBm';
+  });
+}
+setInterval(animRF,155);animRF();
+
+// ══════════════════════════════════════
+// SCAN LOG
+// ══════════════════════════════════════
+const logEl=document.getElementById('logPanel');
+const seedLogs=[
+  {m:'ALERT: DJI OcuSync 2.4GHz — UAS-009',t:'alert'},
+  {m:'UAS-009 pilot located — 87% conf',t:'warn'},
+  {m:'RF scan pass complete — 5 bands',t:'ok'},
+  {m:'WARNING: Unknown RF burst 915MHz',t:'warn'},
+  {m:'Oracle-1 classifier: 94% match',t:'ok'},
+  {m:'UAS-007 pilot est. 0.9km from drone',t:'warn'},
+  {m:'Oracle-3 GPS sync degraded',t:'warn'},
+  {m:'Budapest sector sweep complete',t:'ok'},
+  {m:'SDR buffer flushed',t:''},
+  {m:'Oracle-2 range check nominal',t:'ok'},
+];
+function addLog(e){
+  const n=new Date();
+  const ts=`${String(n.getUTCHours()).padStart(2,'0')}:${String(n.getUTCMinutes()).padStart(2,'0')}:${String(n.getUTCSeconds()).padStart(2,'0')}`;
+  const line=document.createElement('div');
+  line.className='logline';
+  line.innerHTML=`<span class="log-t">${ts}</span><span class="log-m ${e.t||''}">${e.m}</span>`;
+  logEl.insertBefore(line,logEl.firstChild);
+  if(logEl.children.length>30)logEl.removeChild(logEl.lastChild);
+}
+seedLogs.forEach(l=>addLog(l));
+const liveLogs=[
+  {m:'RF scan pass complete',t:'ok'},
+  {m:'Classifier pass — no new sigs',t:''},
+  {m:'UAS-009 bearing update: 043°',t:''},
+  {m:'Checking 2.4GHz band…',t:''},
+  {m:'Budapest sector clear',t:'ok'},
+  {m:'Oracle-2 uptime nominal',t:'ok'},
+];
+setInterval(()=>addLog(liveLogs[Math.floor(Math.random()*liveLogs.length)]),3000);
+
+// ══════════════════════════════════════
+// CLOCK
+// ══════════════════════════════════════
+const DAYS=['SUN','MON','TUE','WED','THU','FRI','SAT'];
+const MONS=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+function tick(){
+  const n=new Date();
+  document.getElementById('clk').textContent=String(n.getUTCHours()).padStart(2,'0')+':'+String(n.getUTCMinutes()).padStart(2,'0')+':'+String(n.getUTCSeconds()).padStart(2,'0')+' UTC';
+  document.getElementById('clkd').textContent=DAYS[n.getDay()]+' '+String(n.getDate()).padStart(2,'0')+' '+MONS[n.getMonth()]+' '+n.getFullYear();
+}
+setInterval(tick,1000);tick();
+
+// ══════════════════════════════════════
+// ALERT SYSTEM
+// ══════════════════════════════════════
+let soundMuted = false;
+let alertQueue = [];
+let alertActive = false;
+let alertDismissTimer = null;
+let alertHistory = [];
+
+// Web Audio API — generate tones without files
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+
+function getAudioCtx(){
+  if(!audioCtx) audioCtx = new AudioCtx();
+  return audioCtx;
+}
+
+function playAlertTone(level){
+  if(soundMuted) return;
+  try {
+    const ctx = getAudioCtx();
+    const configs = {
+      high: [
+        {freq:880, dur:0.12, delay:0},
+        {freq:0,   dur:0.06, delay:0.12},
+        {freq:880, dur:0.12, delay:0.18},
+        {freq:0,   dur:0.06, delay:0.30},
+        {freq:1200,dur:0.22, delay:0.36},
+      ],
+      med: [
+        {freq:660, dur:0.15, delay:0},
+        {freq:0,   dur:0.08, delay:0.15},
+        {freq:660, dur:0.15, delay:0.23},
+      ],
+      low: [
+        {freq:440, dur:0.18, delay:0},
+        {freq:0,   dur:0.1,  delay:0.18},
+        {freq:520, dur:0.18, delay:0.28},
+      ],
+    };
+    const tones = configs[level] || configs.low;
+    tones.forEach(({freq, dur, delay}) => {
+      if(freq === 0) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = level==='high' ? 'square' : 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + delay);
+      gain.gain.setValueAtTime(level==='high' ? 0.18 : 0.12, ctx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + dur);
+      osc.start(ctx.currentTime + delay);
+      osc.stop(ctx.currentTime + delay + dur + 0.05);
+    });
+  } catch(e){}
+}
+
+function flashScreen(level){
+  const flash = document.getElementById('alertFlash');
+  if(level==='high') flash.style.background='rgba(255,59,59,0.14)';
+  else if(level==='med') flash.style.background='rgba(255,170,0,0.10)';
+  else flash.style.background='rgba(0,200,255,0.08)';
+  setTimeout(()=>{ flash.style.background='rgba(255,59,59,0)'; }, 200);
+  if(level==='high'){
+    setTimeout(()=>{
+      flash.style.background='rgba(255,59,59,0.10)';
+      setTimeout(()=>{ flash.style.background='rgba(255,59,59,0)'; },150);
+    },300);
+  }
+}
+
+function showAlertBanner(alert){
+  const banner = document.getElementById('alertBanner');
+  const col = alert.level==='high'?'#ff3b3b':alert.level==='med'?'#ffaa00':'#00ff88';
+
+  document.getElementById('alertBannerTitle').textContent =
+    alert.level==='high' ? '⚠ HIGH THREAT DETECTED' :
+    alert.level==='med'  ? '— MEDIUM THREAT DETECTED' :
+                           '◦ LOW THREAT DETECTED';
+  document.getElementById('alertBannerTitle').style.color = col;
+
+  document.getElementById('alertBannerSub').textContent =
+    `${alert.id} · ${alert.model} · ${alert.freq} · Oracle-${alert.oracle}`;
+
+  const body = document.getElementById('alertBannerBody');
+  body.innerHTML = `
+    <div class="afield"><div class="afield-l">Threat ID</div><div class="afield-v red">${alert.id}</div></div>
+    <div class="afield"><div class="afield-l">Classification</div><div class="afield-v">${alert.model}</div></div>
+    <div class="afield"><div class="afield-l">Frequency</div><div class="afield-v amber">${alert.freq}</div></div>
+    <div class="afield"><div class="afield-l">Signal Strength</div><div class="afield-v amber">${alert.sig}</div></div>
+    <div class="afield"><div class="afield-l">Detected By</div><div class="afield-v cyan">${alert.oracle}</div></div>
+    <div class="afield"><div class="afield-l">Pilot Estimated</div><div class="afield-v">${alert.pilotDist} from drone</div></div>
+  `;
+
+  // Progress bar auto-dismiss (8s for high, 5s for others)
+  const dismissTime = alert.level==='high' ? 8000 : 5000;
+  const prog = document.getElementById('alertProgress');
+  prog.style.transition = 'none';
+  prog.style.width = '100%';
+  prog.style.background = col;
+  setTimeout(()=>{
+    prog.style.transition = `width ${dismissTime}ms linear`;
+    prog.style.width = '0%';
+  }, 50);
+
+  banner.classList.add('show');
+  alertActive = true;
+
+  if(alertDismissTimer) clearTimeout(alertDismissTimer);
+  alertDismissTimer = setTimeout(()=>{ dismissAlert(); }, dismissTime);
+}
+
+function dismissAlert(){
+  document.getElementById('alertBanner').classList.remove('show');
+  alertActive = false;
+  if(alertDismissTimer){ clearTimeout(alertDismissTimer); alertDismissTimer=null; }
+  // Show next queued alert if any
+  if(alertQueue.length > 0){
+    setTimeout(()=>{
+      const next = alertQueue.shift();
+      fireAlert(next);
+    }, 600);
+  }
+}
+
+function fireAlert(alert){
+  // Add to history tray
+  alertHistory.unshift(alert);
+  renderAlertTray();
+
+  // Update header count
+  document.getElementById('alertHeaderCount').textContent = alertHistory.length;
+
+  // Flash + sound
+  flashScreen(alert.level);
+  playAlertTone(alert.level);
+
+  // Banner
+  if(alertActive){
+    if(alert.level==='high') alertQueue.unshift(alert); // high jumps queue
+    else alertQueue.push(alert);
+  } else {
+    showAlertBanner(alert);
+  }
+
+  // Log it
+  addLog({m:`ALERT [${alert.level.toUpperCase()}] ${alert.id} — ${alert.freq} · ${alert.sig}`, t:'alert'});
+}
+
+function renderAlertTray(){
+  const tray = document.getElementById('alertTray');
+  tray.innerHTML = '';
+  alertHistory.slice(0,8).forEach(a => {
+    const col = a.level==='high'?'#ff3b3b':a.level==='med'?'#ffaa00':'#00ff88';
+    const row = document.createElement('div');
+    row.className = 'atray-item';
+    row.onclick = () => showAlertBanner(a);
+    row.innerHTML = `
+      <div class="atray-dot ${a.level}"></div>
+      <div class="atray-id" style="color:${col}">${a.id}</div>
+      <div class="atray-msg">${a.model} · ${a.freq}</div>
+      <div class="atray-time">${a.time}</div>`;
+    tray.appendChild(row);
+  });
+  // Update badge
+  document.getElementById('alertHistoryCount').textContent = alertHistory.length+' ALERTS';
+}
+
+function showAlertPanel(){
+  // Scroll left panel to alert tray
+  document.querySelector('.side-l').scrollTo({top:99999,behavior:'smooth'});
+}
+
+function toggleMute(){
+  soundMuted = !soundMuted;
+  const btn = document.getElementById('alertMuteBtn');
+  btn.textContent = soundMuted ? '🔇 MUTED' : '🔊 SOUND ON';
+  btn.classList.toggle('muted', soundMuted);
+}
+
+// ── Seed initial alerts from existing threats ──
+function now8(){
+  const n=new Date();
+  return String(n.getUTCHours()).padStart(2,'0')+':'+String(n.getUTCMinutes()).padStart(2,'0')+':'+String(n.getUTCSeconds()).padStart(2,'0');
+}
+
+// Fire initial alerts on load (staggered)
+const initialAlerts = threats.map(t=>({
+  id: t.id,
+  level: t.level,
+  model: t.model,
+  freq: t.freq,
+  sig: t.sig,
+  oracle: oracleUnits.reduce((best,u)=>{
+    const d=haversine(t.drone.lat,t.drone.lng,u.lat,u.lng);
+    return d < (best.d||999) ? {id:u.id,d} : best;
+  },{}).id || 'ORACLE-1',
+  pilotDist: t.pilot.dist_from_drone,
+  time: now8(),
+}));
+
+// Stagger the initial alerts so they don't all fire at once
+setTimeout(()=>fireAlert(initialAlerts[0]), 1200);
+setTimeout(()=>fireAlert(initialAlerts[1]), 3500);
+setTimeout(()=>fireAlert(initialAlerts[2]), 5800);
+
+// ── Simulate new incoming alert every ~25 seconds ──
+const newAlertPool = [
+  { id:'UAS-013', level:'high', model:'DJI Mavic 3', freq:'2.4 GHz', sig:'-51 dBm', pilotDist:'0.8 km' },
+  { id:'UAS-014', level:'med',  model:'Unknown',     freq:'915 MHz', sig:'-68 dBm', pilotDist:'1.4 km' },
+  { id:'UAS-015', level:'low',  model:'Parrot Disco',freq:'433 MHz', sig:'-75 dBm', pilotDist:'0.6 km' },
+];
+let newAlertIdx = 0;
+setInterval(()=>{
+  const a = newAlertPool[newAlertIdx % newAlertPool.length];
+  newAlertIdx++;
+  fireAlert({
+    ...a,
+    oracle: oracleUnits[Math.floor(Math.random()*oracleUnits.length)].id,
+    time: now8(),
+  });
+}, 25000);
+</script>
+</body>
+</html>
